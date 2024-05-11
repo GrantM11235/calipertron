@@ -8,5 +8,69 @@
 #   with-sources: false
 
 -e file:.
+asttokens==2.4.1
+    # via stack-data
+comm==0.2.2
+    # via ipywidgets
+contourpy==1.2.1
+    # via matplotlib
+cycler==0.12.1
+    # via matplotlib
+decorator==5.1.1
+    # via ipython
+executing==2.0.1
+    # via stack-data
+fonttools==4.51.0
+    # via matplotlib
+ipython==8.24.0
+    # via ipywidgets
+ipywidgets==8.1.2
+    # via calipertron
+jedi==0.19.1
+    # via ipython
+jupyterlab-widgets==3.0.10
+    # via ipywidgets
+kiwisolver==1.4.5
+    # via matplotlib
+matplotlib==3.8.4
+    # via calipertron
+matplotlib-inline==0.1.7
+    # via ipython
 numpy==1.26.4
     # via calipertron
+    # via contourpy
+    # via matplotlib
+packaging==24.0
+    # via matplotlib
+parso==0.8.4
+    # via jedi
+pexpect==4.9.0
+    # via ipython
+pillow==10.3.0
+    # via matplotlib
+prompt-toolkit==3.0.43
+    # via ipython
+ptyprocess==0.7.0
+    # via pexpect
+pure-eval==0.2.2
+    # via stack-data
+pygments==2.18.0
+    # via ipython
+pyparsing==3.1.2
+    # via matplotlib
+python-dateutil==2.9.0.post0
+    # via matplotlib
+six==1.16.0
+    # via asttokens
+    # via python-dateutil
+stack-data==0.6.3
+    # via ipython
+traitlets==5.14.3
+    # via comm
+    # via ipython
+    # via ipywidgets
+    # via matplotlib-inline
+wcwidth==0.2.13
+    # via prompt-toolkit
+widgetsnbextension==4.0.10
+    # via ipywidgets
