@@ -1,3 +1,3 @@
-# calipertron
+pip install jupyterlab ipympl
 
-Describe your project here.
+jupyter lab Untitled.ipynb
