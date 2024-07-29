@@ -1,0 +1,128 @@
+pip install jupyterlab ipympl
+
+jupyter lab Untitled.ipynb
+
+* Log
+** July 29 - Arudino test
+
+installed arduino-ide_2.3.2_macOS_arm64
+
+
+followed https://community.st.com/t5/stm32-mcus/how-to-program-and-debug-the-stm32-using-the-arduino-ide/ta-p/608514
+
+add board manager URL in preferences: https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json
+
+installed STM32 MCU based boards version 2.8.1
+
+Trying to upload:
+
+    Sketch uses 14896 bytes (45%) of program storage space. Maximum is 32768 bytes.
+    Global variables use 1632 bytes (15%) of dynamic memory, leaving 8608 bytes for local variables. Maximum is 10240 bytes.
+    STM32CubeProgrammer not found (STM32_Programmer_CLI).
+      Please install it or add '<STM32CubeProgrammer path>/bin' to your PATH environment:
+      https://www.st.com/en/development-tools/stm32cubeprog.html
+
+Aight, had to install cube stuff but then the arduino upload worked:
+
+
+    Sketch uses 14896 bytes (45%) of program storage space. Maximum is 32768 bytes.
+    Global variables use 1632 bytes (15%) of dynamic memory, leaving 8608 bytes for local variables. Maximum is 10240 bytes.
+    Warning: long options not supported due to getopt from FreeBSD usage.
+    Selected interface: swd
+    -------------------------------------------------------------------
+    STM32CubeProgrammer v2.17.0                  
+    -------------------------------------------------------------------
+
+    ST-LINK SN  : 53FF6C064884534937360587
+    ST-LINK FW  : V2J37S7
+    Board       : --
+    Voltage     : 3.25V
+    SWD freq    : 4000 KHz
+    Connect mode: Under Reset
+    Reset mode  : Hardware reset
+    Device ID   : 0x410
+    Revision ID : Rev X
+    Device name : STM32F101/F102/F103 Medium-density
+    Flash size  : 64 KBytes
+    Device type : MCU
+    Device CPU  : Cortex-M3
+    BL Version  : --
+
+
+
+    Memory Programming ...
+    Opening and parsing file: Base.ino.bin
+    File          : Base.ino.bin
+    Size          : 14.84 KB 
+    Address       : 0x08000000 
+
+
+    Erasing memory corresponding to segment 0:
+    Erasing internal memory sectors [0 14]
+    Download in Progress:
+
+
+    File download complete
+    Time elapsed during download operation: 00:00:01.048
+
+    RUNNING Program ... 
+    Address:      : 0x8000000
+    Application is running, Please Hold on...
+    Start operation achieved successfully
+
+    
+Was also able to get serial monitor working by setting USB Support Generic Serial CDC.
+Man, Arduino is nicer than Rust lol.
+
+
+The Arduino serial monitor only showed 100 points at a time (ugh!) but I found https://github.com/hacknus/serial-monitor-rust which worked great.
+
+uggh, serial monitor isn't actually live.
+Seems like it must have some buffer or otherwise be dropping stuff on the floor.
+Recording a few seconds and then saving a CSV only gives a 1000-ish data.
+
+but using minicom
+
+minicom -D /dev/tty.usbmodem4995277E384B1 -b 115200 -C foo.csv
+
+gives 10x the data.
+
+
+
+** 2024 July 29 - hardware connection test
+Connected via stlink and jtag pins as per https://github.com/MitkoDyakov/BluePillCaliper/blob/main/Hardware/Schematics%20V1.1.pdf
+
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
+
+
+$ probe-rs info
+Probing target via JTAG
+
+ WARN probe_rs::probe::stlink: send_jtag_command 242 failed: JtagGetIdcodeError
+Error identifying target using protocol JTAG: An error with the usage of the probe occurred
+
+Probing target via SWD
+
+ WARN probe_rs::probe::stlink: send_jtag_command 242 failed: JtagGetIdcodeError
+Error identifying target using protocol SWD: An error with the usage of the probe occurred
+
+
+ah, I was reading the schematic incorrectly. Managed to connect:
+
+$ probe-rs info
+Probing target via JTAG
+
+ARM Chip with debug port Default:
+Debug Port: DPv1, DP Designer: ARM Ltd
+└── 0 MemoryAP
+    └── ROM Table (Class 1), Designer: STMicroelectronics
+        ├── Cortex-M3 SCS   (Generic IP component)
+        │   └── CPUID
+        │       ├── IMPLEMENTER: ARM Ltd
+        │       ├── VARIANT: 1
+        │       ├── PARTNO: Cortex-M3
+        │       └── REVISION: 1
+        ├── Cortex-M3 DWT   (Generic IP component)
+        ├── Cortex-M3 FBP   (Generic IP component)
+        ├── Cortex-M3 ITM   (Generic IP component)
+        └── Cortex-M3 TPIU  (Coresight Component)

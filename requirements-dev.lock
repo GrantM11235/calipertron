@@ -8,48 +8,97 @@
 #   with-sources: false
 
 -e file:.
+appnope==0.1.4
+    # via ipykernel
 asttokens==2.4.1
     # via stack-data
 comm==0.2.2
+    # via ipykernel
     # via ipywidgets
 contourpy==1.2.1
     # via matplotlib
 cycler==0.12.1
     # via matplotlib
+debugpy==1.8.1
+    # via ipykernel
 decorator==5.1.1
     # via ipython
 executing==2.0.1
     # via stack-data
 fonttools==4.51.0
     # via matplotlib
+ipykernel==6.29.4
+    # via calipertron
+ipympl==0.9.4
+    # via calipertron
 ipython==8.24.0
+    # via ipykernel
+    # via ipympl
     # via ipywidgets
+ipython-genutils==0.2.0
+    # via ipympl
 ipywidgets==8.1.2
     # via calipertron
+    # via ipympl
 jedi==0.19.1
     # via ipython
+jupyter-client==8.6.1
+    # via ipykernel
+jupyter-core==5.7.2
+    # via ipykernel
+    # via jupyter-client
 jupyterlab-widgets==3.0.10
     # via ipywidgets
 kiwisolver==1.4.5
     # via matplotlib
 matplotlib==3.8.4
     # via calipertron
+    # via ipympl
+    # via plotnine
 matplotlib-inline==0.1.7
+    # via ipykernel
     # via ipython
+mizani==0.11.4
+    # via plotnine
+nest-asyncio==1.6.0
+    # via ipykernel
 numpy==1.26.4
     # via calipertron
     # via contourpy
+    # via ipympl
     # via matplotlib
+    # via mizani
+    # via pandas
+    # via patsy
+    # via plotnine
+    # via scipy
+    # via statsmodels
 packaging==24.0
+    # via ipykernel
     # via matplotlib
+    # via statsmodels
+pandas==2.2.2
+    # via calipertron
+    # via mizani
+    # via plotnine
+    # via statsmodels
 parso==0.8.4
     # via jedi
+patsy==0.5.6
+    # via statsmodels
 pexpect==4.9.0
     # via ipython
 pillow==10.3.0
+    # via ipympl
     # via matplotlib
+platformdirs==4.2.1
+    # via jupyter-core
+plotnine==0.13.6
+    # via calipertron
 prompt-toolkit==3.0.43
     # via ipython
+psutil==5.9.8
+    # via ipykernel
 ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.2
@@ -59,17 +108,40 @@ pygments==2.18.0
 pyparsing==3.1.2
     # via matplotlib
 python-dateutil==2.9.0.post0
+    # via jupyter-client
     # via matplotlib
+    # via pandas
+pytz==2024.1
+    # via pandas
+pyzmq==26.0.3
+    # via ipykernel
+    # via jupyter-client
+scipy==1.14.0
+    # via mizani
+    # via plotnine
+    # via statsmodels
 six==1.16.0
     # via asttokens
+    # via patsy
     # via python-dateutil
 stack-data==0.6.3
     # via ipython
+statsmodels==0.14.2
+    # via plotnine
+tornado==6.4
+    # via ipykernel
+    # via jupyter-client
 traitlets==5.14.3
     # via comm
+    # via ipykernel
+    # via ipympl
     # via ipython
     # via ipywidgets
+    # via jupyter-client
+    # via jupyter-core
     # via matplotlib-inline
+tzdata==2024.1
+    # via pandas
 wcwidth==0.2.13
     # via prompt-toolkit
 widgetsnbextension==4.0.10
