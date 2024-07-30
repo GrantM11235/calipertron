@@ -2,6 +2,13 @@ pip install jupyterlab ipympl
 
 jupyter lab Untitled.ipynb
 
+* building rust
+cd embassy/
+
+rustup target add thumbv7m-none-eabi
+
+cargo run --bin hello
+
 * Log
 ** July 29 - Arudino test
 
