@@ -4,14 +4,15 @@
 use defmt::{panic, *};
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
+use embassy_stm32::adc::Adc;
 use embassy_stm32::gpio::{Level, Output, Speed};
+use embassy_stm32::peripherals::ADC1;
 use embassy_stm32::time::Hertz;
-use embassy_stm32::usb::{Driver, Instance};
-use embassy_stm32::{bind_interrupts, peripherals, usb, Config};
+use embassy_stm32::{adc, bind_interrupts, peripherals, usb, Config};
 use embassy_time::Timer;
-use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
-use embassy_usb::driver::EndpointError;
+use embassy_usb::driver::{Driver, Endpoint, EndpointError, EndpointIn, EndpointOut};
 use embassy_usb::Builder;
+
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
@@ -23,6 +24,44 @@ bind_interrupts!(struct AdcIrqs {
 });
 
 const MAX_PACKET_SIZE: u8 = 64;
+
+pub const USB_CLASS_CUSTOM: u8 = 0xFF;
+const USB_SUBCLASS_CUSTOM: u8 = 0x00;
+const USB_PROTOCOL_CUSTOM: u8 = 0x00;
+
+pub struct CustomClass<'d, D: Driver<'d>> {
+    read_ep: D::EndpointOut,
+    write_ep: D::EndpointIn,
+}
+
+impl<'d, D: Driver<'d>> CustomClass<'d, D> {
+    pub fn new(builder: &mut Builder<'d, D>) -> Self {
+        let mut func = builder.function(USB_CLASS_CUSTOM, USB_SUBCLASS_CUSTOM, USB_PROTOCOL_CUSTOM);
+        let mut iface = func.interface();
+        let mut iface_alt = iface.alt_setting(
+            USB_CLASS_CUSTOM,
+            USB_SUBCLASS_CUSTOM,
+            USB_PROTOCOL_CUSTOM,
+            None,
+        );
+        let read_ep = iface_alt.endpoint_bulk_out(MAX_PACKET_SIZE as u16);
+        let write_ep = iface_alt.endpoint_bulk_in(MAX_PACKET_SIZE as u16);
+
+        CustomClass { read_ep, write_ep }
+    }
+
+    pub async fn write_packet(&mut self, data: &[u8]) -> Result<(), EndpointError> {
+        self.write_ep.write(data).await
+    }
+
+    pub async fn read_packet(&mut self, data: &mut [u8]) -> Result<usize, EndpointError> {
+        self.read_ep.read(data).await
+    }
+
+    pub async fn wait_connection(&mut self) {
+        self.read_ep.wait_enabled().await;
+    }
+}
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -54,18 +93,14 @@ async fn main(_spawner: Spawner) {
         Timer::after_millis(10).await;
     }
 
-    let driver = Driver::new(p.USB, Irqs, p.PA12, p.PA11);
+    let driver = embassy_stm32::usb::Driver::new(p.USB, Irqs, p.PA12, p.PA11);
     let (vid, pid) = (0xc0de, 0xcafe);
     let mut config = embassy_usb::Config::new(vid, pid);
     config.max_packet_size_0 = MAX_PACKET_SIZE;
 
-    // Create embassy-usb DeviceBuilder using the driver and config.
-    // It needs some buffers for building the descriptors.
     let mut config_descriptor = [0; 256];
     let mut bos_descriptor = [0; 256];
-    let mut control_buf = [0; 7];
-
-    let mut state = State::new();
+    let mut control_buf = [0; 64];
 
     let mut builder = Builder::new(
         driver,
@@ -76,7 +111,7 @@ async fn main(_spawner: Spawner) {
         &mut control_buf,
     );
 
-    let mut class = CdcAcmClass::new(&mut builder, &mut state, MAX_PACKET_SIZE as u16);
+    let mut custom = CustomClass::new(&mut builder);
     let mut usb = builder.build();
     let usb_fut = usb.run();
 
@@ -85,10 +120,9 @@ async fn main(_spawner: Spawner) {
 
     let fut = async {
         loop {
-            class.wait_connection().await;
+            custom.wait_connection().await;
             info!("Connected");
-            //let _ = echo(&mut class).await;
-            let _ = stream_adc(&mut class, &mut adc, &mut pin).await;
+            let _ = stream_adc(&mut custom, &mut adc, &mut pin).await;
             info!("Disconnected");
         }
     };
@@ -109,33 +143,15 @@ impl From<EndpointError> for Disconnected {
     }
 }
 
-async fn echo<'d, T: Instance + 'd>(
-    class: &mut CdcAcmClass<'d, Driver<'d, T>>,
-) -> Result<(), Disconnected> {
-    let mut buf = [0; MAX_PACKET_SIZE as usize];
-    loop {
-        let n = class.read_packet(&mut buf).await?;
-        let data = &buf[..n];
-        info!("data: {:x}", data);
-        class.write_packet(data).await?;
-    }
-}
-
-use embassy_stm32::adc;
-use embassy_stm32::adc::Adc;
-use embassy_stm32::peripherals::ADC1;
-
-async fn stream_adc<'d, T: Instance + 'd>(
-    class: &mut CdcAcmClass<'d, Driver<'d, T>>,
+async fn stream_adc<'d, D: Driver<'d>>(
+    custom: &mut CustomClass<'d, D>,
     adc: &mut Adc<'d, ADC1>,
-    pin: &mut impl embassy_stm32::adc::AdcChannel<ADC1>,
+    pin: &mut impl adc::AdcChannel<ADC1>,
 ) -> Result<(), Disconnected> {
     let mut vrefint = adc.enable_vref();
     let vrefint_sample = adc.read(&mut vrefint).await;
-    let convert_to_millivolts = |sample| {
-        const VREFINT_MV: u32 = 1200;
-        (u32::from(sample) * VREFINT_MV / u32::from(vrefint_sample)) as u16
-    };
+    let convert_to_millivolts =
+        |sample| (u32::from(sample) * adc::VREF_INT / u32::from(vrefint_sample)) as u16;
 
     let mut buf = [0u8; MAX_PACKET_SIZE as usize];
     let samples_per_packet = (MAX_PACKET_SIZE as usize) / 2; // 2 bytes per sample
@@ -144,9 +160,8 @@ async fn stream_adc<'d, T: Instance + 'd>(
         for i in 0..samples_per_packet {
             let v = adc.read(pin).await;
             let mv = convert_to_millivolts(v);
-            buf[i * 2] = (mv >> 8) as u8;
-            buf[i * 2 + 1] = mv as u8;
+            buf[(i * 2)..(i * 2 + 2)].copy_from_slice(&mv.to_be_bytes());
         }
-        class.write_packet(&buf).await?;
+        custom.write_packet(&buf).await?;
     }
 }

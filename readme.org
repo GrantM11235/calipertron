@@ -10,6 +10,23 @@ rustup target add thumbv7m-none-eabi
 cargo run --bin hello
 
 * Log
+** July 31 - Rust USB ADC data streaming.
+Got this working first by porting Embassy USB CDC example, but on MacOS there's some kind of internal buffer that waits to fill up before any results are printed out of the file.
+It takes 10+ seconds so is probably a few MB.
+
+I used Cursor to generate, then had it do a custom USB class protocol thing so I can bypass the CDC_ACM virtual serial port stuff.
+
+It took a bit of coaxing, but I managed to get something working with a custom reader too.
+
+Embassy seems to have nice DMA stuff, but it doesn't seem to support F1-series.
+https://github.com/embassy-rs/embassy/pull/3116
+
+I should just give up on this for now and stream naively.
+
+
+
+
+
 ** July 29 - Arudino test
 
 installed arduino-ide_2.3.2_macOS_arm64
