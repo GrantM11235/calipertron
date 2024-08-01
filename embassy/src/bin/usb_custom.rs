@@ -1,10 +1,10 @@
 #![no_std]
 #![no_main]
 
-use defmt::{panic, *};
+use defmt::*;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
-use embassy_stm32::adc::Adc;
+use embassy_stm32::adc::{Adc, RxDma};
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::peripherals::ADC1;
 use embassy_stm32::time::Hertz;
@@ -24,7 +24,7 @@ bind_interrupts!(struct AdcIrqs {
 });
 
 const MAX_PACKET_SIZE: u8 = 64;
-
+const SAMPLES_PER_PACKET: usize = (MAX_PACKET_SIZE as usize) / 2; // 2 bytes per sample
 pub const USB_CLASS_CUSTOM: u8 = 0xFF;
 const USB_SUBCLASS_CUSTOM: u8 = 0x00;
 const USB_PROTOCOL_CUSTOM: u8 = 0x00;
@@ -93,6 +93,9 @@ async fn main(_spawner: Spawner) {
         Timer::after_millis(10).await;
     }
 
+    ////////////////////////
+    // USB Setup
+
     let driver = embassy_stm32::usb::Driver::new(p.USB, Irqs, p.PA12, p.PA11);
     let (vid, pid) = (0xc0de, 0xcafe);
     let mut config = embassy_usb::Config::new(vid, pid);
@@ -113,55 +116,103 @@ async fn main(_spawner: Spawner) {
 
     let mut custom = CustomClass::new(&mut builder);
     let mut usb = builder.build();
-    let usb_fut = usb.run();
+
+    let fut_usb = usb.run();
+
+    ////////////////////////
+    // ADC + DMA setup
+
+    let mut adc_buffer = [0; 2 * SAMPLES_PER_PACKET];
+    let mut adc_rb = unsafe {
+        use embassy_stm32::dma::*;
+        let request = p.DMA1_CH1.request();
+        let mut opts = TransferOptions::default();
+        opts.half_transfer_ir = true;
+        ReadableRingBuffer::new(
+            p.DMA1_CH1,
+            request,
+            embassy_stm32::pac::ADC1.dr().as_ptr() as *mut u16,
+            &mut adc_buffer,
+            opts,
+        )
+    };
 
     let mut adc = Adc::new(p.ADC1);
-    let mut pin = p.PB1;
 
-    let fut = async {
+    let vrefint_sample = {
+        let mut vrefint = adc.enable_vref();
+
+        // give vref some time to warm up
+        embassy_time::block_for(embassy_time::Duration::from_micros(100));
+
+        adc.read(&mut vrefint).await as u32
+    };
+
+    let convert_to_millivolts = |sample| (sample as u32 * adc::VREF_INT / vrefint_sample) as u16;
+
+    // Configure ADC for continuous conversion with DMA
+    let adc = embassy_stm32::pac::ADC1;
+
+    adc.cr1().modify(|w| {
+        w.set_scan(true);
+    });
+
+    adc.cr2().modify(|w| {
+        w.set_dma(true);
+        w.set_cont(true)
+    });
+
+    // Configure channel and sampling time
+    const PIN_CHANNEL: u8 = 9; // PB1 is on channel 9 for STM32F103
+
+    adc.sqr3().modify(|w| w.set_sq(0, PIN_CHANNEL));
+    adc.smpr2()
+        .modify(|w| w.set_smp(PIN_CHANNEL as usize, adc::SampleTime::CYCLES239_5));
+
+    // Start ADC conversions
+    adc.cr2().modify(|w| w.set_adon(true));
+
+    ////////////////////////
+    // Main loop
+
+    let fut_main = async {
         loop {
             custom.wait_connection().await;
+
             info!("Connected");
-            let _ = stream_adc(&mut custom, &mut adc, &mut pin).await;
-            info!("Disconnected");
+
+            // Start handling DMA requests from ADC
+            adc_rb.start();
+
+            let mut buf = [0; SAMPLES_PER_PACKET];
+
+            loop {
+                let r = adc_rb.read_exact(&mut buf).await;
+
+                if r.is_err() {
+                    error!("ADC_RB error: {:?}", r);
+                    break;
+                }
+
+                // Process and send the data
+                for i in 0..SAMPLES_PER_PACKET {
+                    buf[i] = convert_to_millivolts(buf[i]);
+                }
+
+                let r = custom.write_packet(bytemuck::cast_slice(&buf)).await;
+
+                if r.is_err() {
+                    error!("USB Error: {:?}", r);
+                    break;
+                }
+            }
+
+            adc_rb.stop().await;
+            adc_rb.clear();
         }
     };
 
     // Run everything concurrently.
     // If we had made everything `'static` above instead, we could do this using separate tasks instead.
-    join(usb_fut, fut).await;
-}
-
-struct Disconnected {}
-
-impl From<EndpointError> for Disconnected {
-    fn from(val: EndpointError) -> Self {
-        match val {
-            EndpointError::BufferOverflow => panic!("Buffer overflow"),
-            EndpointError::Disabled => Disconnected {},
-        }
-    }
-}
-
-async fn stream_adc<'d, D: Driver<'d>>(
-    custom: &mut CustomClass<'d, D>,
-    adc: &mut Adc<'d, ADC1>,
-    pin: &mut impl adc::AdcChannel<ADC1>,
-) -> Result<(), Disconnected> {
-    let mut vrefint = adc.enable_vref();
-    let vrefint_sample = adc.read(&mut vrefint).await;
-    let convert_to_millivolts =
-        |sample| (u32::from(sample) * adc::VREF_INT / u32::from(vrefint_sample)) as u16;
-
-    let mut buf = [0u8; MAX_PACKET_SIZE as usize];
-    let samples_per_packet = (MAX_PACKET_SIZE as usize) / 2; // 2 bytes per sample
-
-    loop {
-        for i in 0..samples_per_packet {
-            let v = adc.read(pin).await;
-            let mv = convert_to_millivolts(v);
-            buf[(i * 2)..(i * 2 + 2)].copy_from_slice(&mv.to_be_bytes());
-        }
-        custom.write_packet(&buf).await?;
-    }
+    join(fut_usb, fut_main).await;
 }

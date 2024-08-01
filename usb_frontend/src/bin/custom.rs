@@ -24,8 +24,8 @@ fn main() {
 
         let data = completion.data.as_slice();
         for chunk in data.chunks_exact(2) {
-            if let [high, low] = chunk {
-                let adc_value = u16::from_be_bytes([*high, *low]);
+            if let [low, high] = chunk {
+                let adc_value = u16::from_le_bytes([*low, *high]);
                 println!("ADC value: {} mV", adc_value);
             }
         }
