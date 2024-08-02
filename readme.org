@@ -7,9 +7,44 @@ cd embassy/
 
 rustup target add thumbv7m-none-eabi
 
-cargo run --bin hello
+cargo install probe-rs-tools
+
+
+* firmware
+
+probe-rs attach --chip STM32F103C8 target/thumbv7m-none-eabi/release/usb_custom
+
 
 * Log
+** Aug 2 - signal emission and ADC pickup
+Claude helped me make a little USB scope visualization.
+
+For the life of me I can't seem to affect the waveform, though.
+The average value seems to change on every reset.
+
+There's no pulldown, so I thought it might be a floating voltage.
+But trying to clear it with
+
+    {
+        let _adc_pin = Output::new(p.PB1, Level::Low, Speed::VeryHigh);
+        Timer::after_millis(1000).await;
+        // dropping returns to high impedence
+    }
+
+doesn't affect things.
+average value can be anywhere from 800 to 1400.
+Though I guess looking at the schematic the floating is occucring before the MCP6S21 amplifier.
+
+
+Let's rule out it's not some USB delay thing by generating a cycling counter.
+
+Yeah, USB and egui rendering look superfast, no problems there.
+
+Maybe the ADC isn't actually sampling properly and it's repeating itself?
+
+Yeah, I think that's what's happening. scrolling through the output file, the readings are super identical.
+
+
 ** July 31 - Rust USB ADC data streaming.
 Got this working first by porting Embassy USB CDC example, but on MacOS there's some kind of internal buffer that waits to fill up before any results are printed out of the file.
 It takes 10+ seconds so is probably a few MB.

@@ -96,16 +96,16 @@ async fn main(_spawner: Spawner) {
     ////////////////////////
     // Signal emission setup
 
-    let _pins = [
-        Output::new(p.PA0, Level::Low, Speed::Low),
-        Output::new(p.PA1, Level::Low, Speed::Low),
-        Output::new(p.PA2, Level::Low, Speed::Low),
-        Output::new(p.PA3, Level::Low, Speed::Low),
-        Output::new(p.PA4, Level::Low, Speed::Low),
-        Output::new(p.PA5, Level::Low, Speed::Low),
-        Output::new(p.PA6, Level::Low, Speed::Low),
-        Output::new(p.PA7, Level::Low, Speed::Low),
-    ];
+    // let _pins = [
+    //     Output::new(p.PA0, Level::Low, Speed::Low),
+    //     Output::new(p.PA1, Level::Low, Speed::Low),
+    //     Output::new(p.PA2, Level::Low, Speed::Low),
+    //     Output::new(p.PA3, Level::Low, Speed::Low),
+    //     Output::new(p.PA4, Level::Low, Speed::Low),
+    //     Output::new(p.PA5, Level::Low, Speed::Low),
+    //     Output::new(p.PA6, Level::Low, Speed::Low),
+    //     Output::new(p.PA7, Level::Low, Speed::Low),
+    // ];
 
     let tim = embassy_stm32::timer::low_level::Timer::new(p.TIM1);
     let timer_registers = tim.regs_advanced();
@@ -185,10 +185,11 @@ async fn main(_spawner: Spawner) {
         let mut vrefint = adc.enable_vref();
 
         // give vref some time to warm up
-        embassy_time::block_for(embassy_time::Duration::from_micros(100));
+        Timer::after_millis(100).await;
 
         adc.read(&mut vrefint).await as u32
     };
+    info!("VREFINT: {}", vrefint_sample);
 
     let convert_to_millivolts = |sample| (sample as u32 * adc::VREF_INT / vrefint_sample) as u16;
 
@@ -235,7 +236,6 @@ async fn main(_spawner: Spawner) {
                     error!("ADC_RB error: {:?}", r);
                     break;
                 }
-
                 // Process and send the data
                 for i in 0..SAMPLES_PER_PACKET {
                     buf[i] = convert_to_millivolts(buf[i]);

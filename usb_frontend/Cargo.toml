@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 nusb = "0.1"
 futures-lite = "2"
+egui = {version = "0.28.1" }
+eframe = "0.28.1"
+egui_plot = "0.28.1"
