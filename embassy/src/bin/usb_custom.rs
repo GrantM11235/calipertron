@@ -96,7 +96,7 @@ async fn main(_spawner: Spawner) {
     ////////////////////////
     // Signal emission setup
 
-    let pins = [
+    let _pins = [
         Output::new(p.PA0, Level::Low, Speed::Low),
         Output::new(p.PA1, Level::Low, Speed::Low),
         Output::new(p.PA2, Level::Low, Speed::Low),
@@ -107,30 +107,33 @@ async fn main(_spawner: Spawner) {
         Output::new(p.PA7, Level::Low, Speed::Low),
     ];
 
-    // let tim = embassy_stm32::timer::low_level::Timer::new(p.TIM1);
+    let tim = embassy_stm32::timer::low_level::Timer::new(p.TIM1);
+    let timer_registers = tim.regs_advanced();
+    timer_registers
+        .cr2()
+        .modify(|w| w.set_ccds(embassy_stm32::pac::timer::vals::Ccds::ONUPDATE));
+    timer_registers.dier().modify(|w| w.set_ude(true)); // Enable update DMA request
 
-    // tim.set_frequency(Hertz(1));
-    // tim.start();
+    tim.set_frequency(Hertz(67_000));
 
-    // {
-    //     use embassy_stm32::dma::*;
-    //     let gpioa = embassy_stm32::pac::GPIOA;
+    tim.start();
 
-    //     let mut opts = TransferOptions::default();
-    //     opts.circular = true;
+    use embassy_stm32::dma::*;
+    let gpioa = embassy_stm32::pac::GPIOA;
 
-    //     let request = embassy_stm32::timer::Ch1Dma::request(&p.DMA1_CH2);
-    //     let transfer = Transfer::new_write(
-    //         p.DMA1_CH2,
-    //         request,
-    //         &SIGNAL,
-    //         gpioa.bsrr().as_ptr() as *mut u32,
-    //         opts,
-    //     );
+    let mut opts = TransferOptions::default();
+    opts.circular = true;
 
-    //     // Start the transfer
-    //     transfer.start();
-    // }
+    let request = embassy_stm32::timer::UpDma::request(&p.DMA1_CH5);
+    let _transfer = unsafe {
+        Transfer::new_write(
+            p.DMA1_CH5,
+            request,
+            &SIGNAL,
+            gpioa.bsrr().as_ptr() as *mut u32,
+            opts,
+        )
+    };
 
     ////////////////////////
     // USB Setup

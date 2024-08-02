@@ -4,7 +4,7 @@ fn main() {
         .find(|d| d.vendor_id() == 0xc0de && d.product_id() == 0xcafe)
         .expect("device should be connected");
 
-    println!("Device info: {di:?}");
+    eprintln!("Device info: {di:?}");
 
     let device = di.open().unwrap();
 
@@ -26,7 +26,8 @@ fn main() {
         for chunk in data.chunks_exact(2) {
             if let [low, high] = chunk {
                 let adc_value = u16::from_le_bytes([*low, *high]);
-                println!("ADC value: {} mV", adc_value);
+                //println!("ADC value: {} mV", adc_value);
+                println!("{}", adc_value);
             }
         }
         queue.submit(nusb::transfer::RequestBuffer::reuse(
