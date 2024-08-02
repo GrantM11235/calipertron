@@ -5,11 +5,11 @@ use defmt::*;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_stm32::adc::Adc;
-use embassy_stm32::gpio::{Level, Output, Speed};
+use embassy_stm32::gpio::{Flex, Level, Output, Speed};
 use embassy_stm32::peripherals::ADC1;
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{adc, bind_interrupts, peripherals, usb, Config};
-use embassy_time::Timer;
+use embassy_time::{Timer, WithTimeout};
 use embassy_usb::driver::{Driver, Endpoint, EndpointError, EndpointIn, EndpointOut};
 use embassy_usb::Builder;
 
@@ -62,6 +62,8 @@ impl<'d, D: Driver<'d>> CustomClass<'d, D> {
         self.read_ep.wait_enabled().await;
     }
 }
+
+static mut ADCB: [u16; 2 * SAMPLES_PER_PACKET] = [0; 2 * SAMPLES_PER_PACKET];
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -165,16 +167,27 @@ async fn main(_spawner: Spawner) {
     // ADC + DMA setup
 
     let mut adc_buffer = [0; 2 * SAMPLES_PER_PACKET];
-    let mut adc_rb = unsafe {
-        use embassy_stm32::dma::*;
-        let request = embassy_stm32::adc::RxDma::request(&p.DMA1_CH1);
-        let mut opts = TransferOptions::default();
-        opts.half_transfer_ir = true;
-        ReadableRingBuffer::new(
+    // let mut adc_rb = unsafe {
+    //     use embassy_stm32::dma::*;
+    //     let request = embassy_stm32::adc::RxDma::request(&p.DMA1_CH1);
+    //     let mut opts = TransferOptions::default();
+    //     opts.half_transfer_ir = true;
+    //     ReadableRingBuffer::new(
+    //         p.DMA1_CH1,
+    //         request,
+    //         embassy_stm32::pac::ADC1.dr().as_ptr() as *mut u16,
+    //         &mut adc_buffer,
+    //         opts,
+    //     )
+    // };
+
+    let request = embassy_stm32::adc::RxDma::request(&p.DMA1_CH1);
+    let _transfer = unsafe {
+        Transfer::new_read_raw(
             p.DMA1_CH1,
             request,
             embassy_stm32::pac::ADC1.dr().as_ptr() as *mut u16,
-            &mut adc_buffer,
+            &mut ADCB,
             opts,
         )
     };
@@ -198,6 +211,8 @@ async fn main(_spawner: Spawner) {
 
     adc.cr1().modify(|w| {
         w.set_scan(true);
+        w.set_eocie(true);
+        // w.set_discen(false);
     });
 
     adc.cr2().modify(|w| {
@@ -206,8 +221,13 @@ async fn main(_spawner: Spawner) {
     });
 
     // Configure channel and sampling time
-    const PIN_CHANNEL: u8 = 9; // PB1 is on channel 9 for STM32F103
+    adc.sqr1().modify(|w| w.set_l(0)); // one conversion.
 
+    // TODO: this may not be necessary
+    let mut pb1 = Flex::new(p.PB1);
+    pb1.set_as_analog();
+
+    const PIN_CHANNEL: u8 = 9; // PB1 is on channel 9 for STM32F103
     adc.sqr3().modify(|w| w.set_sq(0, PIN_CHANNEL));
     adc.smpr2()
         .modify(|w| w.set_smp(PIN_CHANNEL as usize, adc::SampleTime::CYCLES239_5));
@@ -225,17 +245,18 @@ async fn main(_spawner: Spawner) {
             info!("Connected");
 
             // Start handling DMA requests from ADC
-            adc_rb.start();
-
-            let mut buf = [0; SAMPLES_PER_PACKET];
+            //adc_rb.start();
 
             loop {
-                let r = adc_rb.read_exact(&mut buf).await;
+                // let mut buf = [0; SAMPLES_PER_PACKET];
+                // let r = adc_rb.read_exact(&mut buf).await;
 
-                if r.is_err() {
-                    error!("ADC_RB error: {:?}", r);
-                    break;
-                }
+                // if r.is_err() {
+                //     error!("ADC_RB error: {:?}", r);
+                //     break;
+                // }
+
+                let buf = unsafe { &mut ADCB[0..SAMPLES_PER_PACKET] };
                 // Process and send the data
                 for i in 0..SAMPLES_PER_PACKET {
                     buf[i] = convert_to_millivolts(buf[i]);
@@ -247,10 +268,11 @@ async fn main(_spawner: Spawner) {
                     error!("USB Error: {:?}", r);
                     break;
                 }
+                Timer::after_millis(1).await;
             }
 
-            adc_rb.stop().await;
-            adc_rb.clear();
+            // adc_rb.stop().await;
+            // adc_rb.clear();
         }
     };
 

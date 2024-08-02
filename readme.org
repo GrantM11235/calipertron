@@ -45,6 +45,13 @@ Maybe the ADC isn't actually sampling properly and it's repeating itself?
 Yeah, I think that's what's happening. scrolling through the output file, the readings are super identical.
 
 
+Okay, it's something in embassy ring buffer.
+If I have DMA write to a static mut and I just YOLO read from it, the values are definitely change
+
+from looking at https://github.com/embassy-rs/embassy/blob/a2ea2630f648a9a46dc4f9276d9f5eaf256ae893/embassy-stm32/src/adc/ringbuffered_v2.rs#L122 it seems like I'm holding the ring buffer correctly. hmmm.
+
+
+
 ** July 31 - Rust USB ADC data streaming.
 Got this working first by porting Embassy USB CDC example, but on MacOS there's some kind of internal buffer that waits to fill up before any results are printed out of the file.
 It takes 10+ seconds so is probably a few MB.
