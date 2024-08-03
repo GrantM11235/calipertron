@@ -16,6 +16,35 @@ probe-rs attach --chip STM32F103C8 target/thumbv7m-none-eabi/release/usb_custom
 
 
 * Log
+** Aug 3 - ADC pickup
+DMA ring buffer is working.
+the duplicates I was getting earlier is because stop disables the circularity on the channel, but start doesn't restore it.
+so if you call stop once, you get screwed forever.
+
+(I should just reset the device if USB ever disconnects)
+
+based on defmt timing, each loop takes about 600--700us.
+awaiting USB causes us to overrun DMA, so I may need to have a larger buffer and do that in a separate task.
+
+
+Ugh. I have no idea what's fucked here.
+Even when not trying to send over USB, eventually the ringbuffer freezes somehow and the await loop stops.
+
+
+ugh, maybe it's bad wiring?
+just reflashing and fucking about, no real changes and now it's streaming alnog fine.
+
+    // use embassy_stm32::interrupt;
+    // #[interrupt]
+    // fn DMA1_CHANNEL1() {
+    //     info!("interrupt");
+    // }
+
+yeah, very intermittent.
+Everything seems to be working fine now. this is infuriating.
+
+
+
 ** Aug 2 - signal emission and ADC pickup
 Claude helped me make a little USB scope visualization.
 

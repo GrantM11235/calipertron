@@ -10,4 +10,4 @@ runner = [
 target = "thumbv7m-none-eabi"
 
 [env]
-DEFMT_LOG = "trace"
+DEFMT_LOG = "info"

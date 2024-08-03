@@ -19,9 +19,9 @@ bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => usb::InterruptHandler<peripherals::USB>;
 });
 
-bind_interrupts!(struct AdcIrqs {
-    ADC1_2 => adc::InterruptHandler<ADC1>;
-});
+// bind_interrupts!(struct AdcIrqs {
+//     ADC1_2 => adc::InterruptHandler<ADC1>;
+// });
 
 const MAX_PACKET_SIZE: u8 = 64;
 const SAMPLES_PER_PACKET: usize = (MAX_PACKET_SIZE as usize) / 2; // 2 bytes per sample
@@ -98,16 +98,16 @@ async fn main(_spawner: Spawner) {
     ////////////////////////
     // Signal emission setup
 
-    // let _pins = [
-    //     Output::new(p.PA0, Level::Low, Speed::Low),
-    //     Output::new(p.PA1, Level::Low, Speed::Low),
-    //     Output::new(p.PA2, Level::Low, Speed::Low),
-    //     Output::new(p.PA3, Level::Low, Speed::Low),
-    //     Output::new(p.PA4, Level::Low, Speed::Low),
-    //     Output::new(p.PA5, Level::Low, Speed::Low),
-    //     Output::new(p.PA6, Level::Low, Speed::Low),
-    //     Output::new(p.PA7, Level::Low, Speed::Low),
-    // ];
+    let _pins = [
+        Output::new(p.PA0, Level::Low, Speed::Low),
+        Output::new(p.PA1, Level::Low, Speed::Low),
+        Output::new(p.PA2, Level::Low, Speed::Low),
+        Output::new(p.PA3, Level::Low, Speed::Low),
+        Output::new(p.PA4, Level::Low, Speed::Low),
+        Output::new(p.PA5, Level::Low, Speed::Low),
+        Output::new(p.PA6, Level::Low, Speed::Low),
+        Output::new(p.PA7, Level::Low, Speed::Low),
+    ];
 
     let tim = embassy_stm32::timer::low_level::Timer::new(p.TIM1);
     let timer_registers = tim.regs_advanced();
@@ -144,6 +144,7 @@ async fn main(_spawner: Spawner) {
     let (vid, pid) = (0xc0de, 0xcafe);
     let mut config = embassy_usb::Config::new(vid, pid);
     config.max_packet_size_0 = MAX_PACKET_SIZE;
+    config.product = Some("Calipertron");
 
     let mut config_descriptor = [0; 256];
     let mut bos_descriptor = [0; 256];
@@ -167,30 +168,29 @@ async fn main(_spawner: Spawner) {
     // ADC + DMA setup
 
     let mut adc_buffer = [0; 2 * SAMPLES_PER_PACKET];
-    // let mut adc_rb = unsafe {
-    //     use embassy_stm32::dma::*;
-    //     let request = embassy_stm32::adc::RxDma::request(&p.DMA1_CH1);
-    //     let mut opts = TransferOptions::default();
-    //     opts.half_transfer_ir = true;
-    //     ReadableRingBuffer::new(
-    //         p.DMA1_CH1,
-    //         request,
-    //         embassy_stm32::pac::ADC1.dr().as_ptr() as *mut u16,
-    //         &mut adc_buffer,
-    //         opts,
-    //     )
-    // };
-
     let request = embassy_stm32::adc::RxDma::request(&p.DMA1_CH1);
-    let _transfer = unsafe {
-        Transfer::new_read_raw(
+    let mut opts = TransferOptions::default();
+    opts.half_transfer_ir = true;
+    let mut adc_rb = unsafe {
+        ReadableRingBuffer::new(
             p.DMA1_CH1,
             request,
             embassy_stm32::pac::ADC1.dr().as_ptr() as *mut u16,
-            &mut ADCB,
+            &mut adc_buffer,
             opts,
         )
     };
+
+    // let request = embassy_stm32::adc::RxDma::request(&p.DMA1_CH1);
+    // let _transfer = unsafe {
+    //     Transfer::new_read_raw(
+    //         p.DMA1_CH1,
+    //         request,
+    //         embassy_stm32::pac::ADC1.dr().as_ptr() as *mut u16,
+    //         &mut ADCB,
+    //         opts,
+    //     )
+    // };
 
     let mut adc = Adc::new(p.ADC1);
 
@@ -204,7 +204,7 @@ async fn main(_spawner: Spawner) {
     };
     info!("VREFINT: {}", vrefint_sample);
 
-    let convert_to_millivolts = |sample| (sample as u32 * adc::VREF_INT / vrefint_sample) as u16;
+    // let convert_to_millivolts = |sample| (sample as u32 * adc::VREF_INT / vrefint_sample) as u16;
 
     // Configure ADC for continuous conversion with DMA
     let adc = embassy_stm32::pac::ADC1;
@@ -212,7 +212,6 @@ async fn main(_spawner: Spawner) {
     adc.cr1().modify(|w| {
         w.set_scan(true);
         w.set_eocie(true);
-        // w.set_discen(false);
     });
 
     adc.cr2().modify(|w| {
@@ -239,40 +238,43 @@ async fn main(_spawner: Spawner) {
     // Main loop
 
     let fut_main = async {
+        custom.wait_connection().await;
+        info!("Connected");
+
+        // Start handling DMA requests from ADC
+
+        adc_rb.start();
+        let mut buf = [0; SAMPLES_PER_PACKET];
         loop {
-            custom.wait_connection().await;
-
-            info!("Connected");
-
-            // Start handling DMA requests from ADC
-            //adc_rb.start();
-
             loop {
-                // let mut buf = [0; SAMPLES_PER_PACKET];
-                // let r = adc_rb.read_exact(&mut buf).await;
+                let r = adc_rb.read_exact(&mut buf).await;
 
-                // if r.is_err() {
-                //     error!("ADC_RB error: {:?}", r);
-                //     break;
-                // }
-
-                let buf = unsafe { &mut ADCB[0..SAMPLES_PER_PACKET] };
-                // Process and send the data
-                for i in 0..SAMPLES_PER_PACKET {
-                    buf[i] = convert_to_millivolts(buf[i]);
+                if r.is_err() {
+                    error!("ADC_RB error: {:?}", r);
+                    break;
                 }
 
-                let r = custom.write_packet(bytemuck::cast_slice(&buf)).await;
+                // let buf = unsafe { &mut ADCB[0..SAMPLES_PER_PACKET] };
+                // Process and send the data
+                // for i in 0..SAMPLES_PER_PACKET {
+                //     buf[i] = convert_to_millivolts(buf[i]);
+                // }
 
+                // i += 1;
+                // if 0 == i % 100 {
+                //     info!(".");
+                // }
+
+                let r = custom.write_packet(bytemuck::cast_slice(&buf)).await;
                 if r.is_err() {
                     error!("USB Error: {:?}", r);
                     break;
                 }
-                Timer::after_millis(1).await;
+                // Timer::after_millis(1).await;
             }
 
-            // adc_rb.stop().await;
-            // adc_rb.clear();
+            //adc_rb.stop().await;
+            adc_rb.clear();
         }
     };
 
