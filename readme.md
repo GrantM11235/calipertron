@@ -1,22 +1,46 @@
-pip install jupyterlab ipympl
+# Kevin's work-in-progress caliper firmware/software
 
-jupyter lab Untitled.ipynb
+Please keep code/repo private for now. I'll tidy and open-source later.
 
-* building rust
-cd embassy/
+Firmware running against [BluePillCaliper](https://github.com/MitkoDyakov/BluePillCaliper/).
 
-rustup target add thumbv7m-none-eabi
+## install
 
-cargo install probe-rs-tools
+First [install Rust](https://www.rust-lang.org/tools/install), then:
+
+    rustup target add thumbv7m-none-eabi
+    cargo install probe-rs-tools
+
+For Python analysis stuff, [install Rye](https://rye.astral.sh/).
+
+## firmware/
+Rust firmware for v1.1 PCB based on the Embassy framework.
+
+Build and flash via STLink:
+
+    cargo run --release --bin usb_custom
+
+Attach to running firmware:
+
+    probe-rs attach --chip STM32F103C8 target/thumbv7m-none-eabi/release/usb_custom
+
+## frontend/
+Custom USB "oscilliscope" and control UI:
+
+    cargo run --release --bin scope
 
 
-* firmware
 
-probe-rs attach --chip STM32F103C8 target/thumbv7m-none-eabi/release/usb_custom
+## analysis/
 
+Python analysis
 
-* Log
-** Aug 3 - ADC pickup
+Install:
+
+    rye sync
+
+## Log
+### Aug 3 - ADC pickup
 DMA ring buffer is working.
 the duplicates I was getting earlier is because stop disables the circularity on the channel, but start doesn't restore it.
 so if you call stop once, you get screwed forever.
@@ -45,7 +69,7 @@ Everything seems to be working fine now. this is infuriating.
 
 
 
-** Aug 2 - signal emission and ADC pickup
+### Aug 2 - signal emission and ADC pickup
 Claude helped me make a little USB scope visualization.
 
 For the life of me I can't seem to affect the waveform, though.
@@ -81,7 +105,7 @@ from looking at https://github.com/embassy-rs/embassy/blob/a2ea2630f648a9a46dc4f
 
 
 
-** July 31 - Rust USB ADC data streaming.
+### July 31 - Rust USB ADC data streaming.
 Got this working first by porting Embassy USB CDC example, but on MacOS there's some kind of internal buffer that waits to fill up before any results are printed out of the file.
 It takes 10+ seconds so is probably a few MB.
 
@@ -98,7 +122,7 @@ I should just give up on this for now and stream naively.
 
 
 
-** July 29 - Arudino test
+### July 29 - Arudino test
 
 installed arduino-ide_2.3.2_macOS_arm64
 
@@ -184,7 +208,7 @@ gives 10x the data.
 
 
 
-** 2024 July 29 - hardware connection test
+### 2024 July 29 - hardware connection test
 Connected via stlink and jtag pins as per https://github.com/MitkoDyakov/BluePillCaliper/blob/main/Hardware/Schematics%20V1.1.pdf
 
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
