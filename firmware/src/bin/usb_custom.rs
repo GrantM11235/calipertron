@@ -1,15 +1,18 @@
 #![no_std]
 #![no_main]
 
+use core::pin::pin;
+
+use schema::*;
+
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_futures::join::join;
 use embassy_stm32::adc::Adc;
 use embassy_stm32::gpio::{Flex, Level, Output, Speed};
-use embassy_stm32::peripherals::ADC1;
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{adc, bind_interrupts, peripherals, usb, Config};
-use embassy_time::{Timer, WithTimeout};
+use embassy_time::Timer;
 use embassy_usb::driver::{Driver, Endpoint, EndpointError, EndpointIn, EndpointOut};
 use embassy_usb::Builder;
 
@@ -18,10 +21,6 @@ use {defmt_rtt as _, panic_probe as _};
 bind_interrupts!(struct Irqs {
     USB_LP_CAN1_RX0 => usb::InterruptHandler<peripherals::USB>;
 });
-
-// bind_interrupts!(struct AdcIrqs {
-//     ADC1_2 => adc::InterruptHandler<ADC1>;
-// });
 
 const MAX_PACKET_SIZE: u8 = 64;
 const SAMPLES_PER_PACKET: usize = (MAX_PACKET_SIZE as usize) / 2; // 2 bytes per sample
@@ -62,8 +61,6 @@ impl<'d, D: Driver<'d>> CustomClass<'d, D> {
         self.read_ep.wait_enabled().await;
     }
 }
-
-static mut ADCB: [u16; 2 * SAMPLES_PER_PACKET] = [0; 2 * SAMPLES_PER_PACKET];
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -116,7 +113,7 @@ async fn main(_spawner: Spawner) {
         .modify(|w| w.set_ccds(embassy_stm32::pac::timer::vals::Ccds::ONUPDATE));
     timer_registers.dier().modify(|w| w.set_ude(true)); // Enable update DMA request
 
-    tim.set_frequency(Hertz(67_000));
+    tim.set_frequency(Hertz(1_000));
 
     tim.start();
 
@@ -242,7 +239,6 @@ async fn main(_spawner: Spawner) {
         info!("Connected");
 
         // Start handling DMA requests from ADC
-
         adc_rb.start();
         let mut buf = [0; SAMPLES_PER_PACKET];
         loop {
@@ -254,26 +250,46 @@ async fn main(_spawner: Spawner) {
                     break;
                 }
 
-                // let buf = unsafe { &mut ADCB[0..SAMPLES_PER_PACKET] };
-                // Process and send the data
-                // for i in 0..SAMPLES_PER_PACKET {
-                //     buf[i] = convert_to_millivolts(buf[i]);
-                // }
-
-                // i += 1;
-                // if 0 == i % 100 {
-                //     info!(".");
-                // }
-
                 let r = custom.write_packet(bytemuck::cast_slice(&buf)).await;
                 if r.is_err() {
                     error!("USB Error: {:?}", r);
                     break;
                 }
+
                 // Timer::after_millis(1).await;
+
+                let recv_command = async {
+                    let mut command_buf = [0u8; MAX_PACKET_SIZE as usize];
+
+                    match custom.read_packet(&mut command_buf).await {
+                        Ok(size) => {
+                            if let Some(command) = Command::deserialize(&command_buf[..size]) {
+                                Some(command)
+                            } else {
+                                error!("Failed to deserialize command");
+                                None
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to read USB packet: {:?}", e);
+                            None
+                        }
+                    }
+                };
+
+                match futures::poll!(pin!(recv_command)) {
+                    core::task::Poll::Ready(Some(command)) => {
+                        info!("Received command: {:?}", command);
+                        match command {
+                            Command::SetFrequency { frequency_kHz } => {
+                                tim.set_frequency(Hertz((frequency_kHz * 1000.) as u32));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
             }
 
-            //adc_rb.stop().await;
             adc_rb.clear();
         }
     };

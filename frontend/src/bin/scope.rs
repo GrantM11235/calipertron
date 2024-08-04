@@ -1,12 +1,14 @@
 use eframe::egui;
 use egui_plot::{Line, Plot, PlotPoints};
+use flume::{Receiver, Sender};
 use nusb::transfer::{Queue, RequestBuffer};
+use schema::Command;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 const MAX_SAMPLES: usize = 1000;
-const TRANSFER_SIZE: usize = 64;
+const MAX_PACKET_SIZE: usize = 64;
 
 fn main() -> Result<(), eframe::Error> {
     let di = nusb::list_devices()
@@ -20,20 +22,29 @@ fn main() -> Result<(), eframe::Error> {
     let interface = device.claim_interface(0).unwrap();
 
     let endpoint_addr = 1;
-    let queue = interface.bulk_in_queue(0x80 + endpoint_addr);
+    let in_queue = interface.bulk_in_queue(0x80 + endpoint_addr);
+    let out_queue = interface.bulk_out_queue(endpoint_addr);
 
     let samples = Arc::new(Mutex::new(VecDeque::with_capacity(MAX_SAMPLES)));
     let samples_clone = Arc::clone(&samples);
     let threshold = Arc::new(Mutex::new(None));
     let threshold_clone = Arc::clone(&threshold);
 
+    // Create a flume channel for sending messages to the USB thread
+    let (tx, rx) = flume::unbounded();
+
     // Start USB reading thread
     thread::spawn(move || {
-        usb_reading_thread(queue, samples_clone, threshold_clone);
+        usb_reading_thread(in_queue, out_queue, samples_clone, threshold_clone, rx);
     });
 
     let options = eframe::NativeOptions::default();
-    let app = ADCApp { samples, threshold };
+    let app = ADCApp {
+        samples,
+        threshold,
+        tx,
+        frequency_kHz: 1.,
+    };
     eframe::run_native(
         "ADC Visualization",
         options,
@@ -42,19 +53,29 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 fn usb_reading_thread(
-    mut queue: Queue<RequestBuffer>,
+    mut in_queue: Queue<RequestBuffer>,
+    mut out_queue: Queue<Vec<u8>>,
     samples: Arc<Mutex<VecDeque<u16>>>,
     threshold: Arc<Mutex<Option<u16>>>,
+    rx: Receiver<Command>, // Add this parameter
 ) {
     let mut triggered = false;
     let mut prev_value = 0;
 
     loop {
-        while queue.pending() < 1 {
-            queue.submit(nusb::transfer::RequestBuffer::new(TRANSFER_SIZE));
+        // Send any pending commands
+        if let Ok(command) = rx.try_recv() {
+            let mut buf = [0u8; MAX_PACKET_SIZE];
+            if let Ok(serialized) = command.serialize(&mut buf) {
+                out_queue.submit(serialized.into());
+            }
         }
 
-        let completion = futures_lite::future::block_on(queue.next_complete());
+        while in_queue.pending() < 1 {
+            in_queue.submit(nusb::transfer::RequestBuffer::new(MAX_PACKET_SIZE));
+        }
+
+        let completion = futures_lite::future::block_on(in_queue.next_complete());
         let data = completion.data.as_slice();
 
         let threshold = *threshold.lock().unwrap();
@@ -88,22 +109,26 @@ fn usb_reading_thread(
             }
         }
 
-        queue.submit(nusb::transfer::RequestBuffer::reuse(
+        in_queue.submit(nusb::transfer::RequestBuffer::reuse(
             completion.data,
-            TRANSFER_SIZE,
+            MAX_PACKET_SIZE,
         ));
     }
 }
 
+#[allow(non_snake_case)]
 struct ADCApp {
+    frequency_kHz: f64,
     samples: Arc<Mutex<VecDeque<u16>>>,
     threshold: Arc<Mutex<Option<u16>>>,
+    tx: Sender<Command>,
 }
 
 impl eframe::App for ADCApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::SidePanel::left("controls").show(ctx, |ui| {
             ui.heading("Controls");
+
             let mut threshold = self.threshold.lock().unwrap().unwrap_or(0);
             ui.add(egui::Slider::new(&mut threshold, 0..=4000).text("Trigger"));
             *self.threshold.lock().unwrap() = if threshold == 0 {
@@ -111,6 +136,19 @@ impl eframe::App for ADCApp {
             } else {
                 Some(threshold)
             };
+
+            if ui
+                .add(
+                    egui::Slider::new(&mut self.frequency_kHz, 1.0..=100.0).text("Frequency (kHz)"),
+                )
+                .changed()
+            {
+                self.tx
+                    .send(Command::SetFrequency {
+                        frequency_kHz: self.frequency_kHz,
+                    })
+                    .unwrap()
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
