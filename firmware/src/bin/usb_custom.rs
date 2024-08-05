@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-use core::pin::pin;
-
 use schema::*;
 
 use defmt::*;
@@ -277,7 +275,7 @@ async fn main(_spawner: Spawner) {
                     }
                 };
 
-                match futures::poll!(pin!(recv_command)) {
+                match embassy_futures::poll_once(recv_command) {
                     core::task::Poll::Ready(Some(command)) => {
                         info!("Received command: {:?}", command);
                         match command {
