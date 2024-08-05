@@ -40,6 +40,47 @@ Install:
     rye sync
 
 ## Log
+### Aug 5 - debugging
+
+
+https://matrix.to/#/!YoLPkieCYHGzdjUhOK:matrix.org/$dOadSX4X9q9CnQEiKhKyZJr5toI8R8q08fk8qE3VloE?via=matrix.org&via=tchncs.de&via=mozilla.org
+
+
+
+14:49:40 $ /Applications/STMicroelectronics/STM32Cube/STM32CubeProgrammer/STM32CubeProgrammer.app/Contents/MacOs/bin/STM32_Programmer_CLI -c port=SWD
+      -------------------------------------------------------------------
+                        STM32CubeProgrammer v2.17.0                  
+      -------------------------------------------------------------------
+
+ST-LINK SN  : 53FF6C064884534937360587
+ST-LINK FW  : V2J37S7
+Board       : --
+Voltage     : 3.24V
+SWD freq    : 4000 KHz
+Connect mode: Normal
+Reset mode  : Software reset
+Device ID   : 0x410
+Revision ID : Rev X
+Device name : STM32F101/F102/F103 Medium-density
+Flash size  : 64 KBytes
+Device type : MCU
+Device CPU  : Cortex-M3
+BL Version  : --
+
+
+I didn't see anything in errata that seemed sus: https://www.st.com/resource/en/errata_sheet/es0340-stm32f101xcde-stm32f103xcde-device-errata-stmicroelectronics.pdf
+
+
+cargo install cargo-binutils
+rustup component add llvm-tools-preview
+
+I can print out assembly of my program now via
+
+    cargo objdump --bin usb_custom --release -- -d --no-show-raw-insn --print-imm-hex
+
+that doesn't help me yet, since I don't have any fault handlers pointing to what went wrong.
+
+
 ### Aug 3 - ADC pickup
 DMA ring buffer is working.
 the duplicates I was getting earlier is because stop disables the circularity on the channel, but start doesn't restore it.
