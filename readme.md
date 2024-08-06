@@ -55,6 +55,63 @@ So maybe something about the USB bus is getting corrupted in such a way that cau
 I do need to trigger interrupt when USB disconnects --- right now the USB tasks just hang in wfe.
 (discovered this via unplugging and then Ctrl-C probe-run, which listed /Users/dev/.cargo/git/checkouts/embassy-9312dcb0ed774b29/46aa206/embassy-executor/src/arch/cortex_m.rs:106:21)
 
+Managed to catch and debug registers via STM32Cube.
+ICSR
+  ISRPending 1
+  VectPending 0x024
+
+
+This vect points to USB stuff, but I didn't see any obvious error flags in the USB registers.
+
+Had another freeze and captured the pending interrupt as 0x01B, which is DMA1_CHANNEL5
+
+// TODO: possible I need to bind 
+    // DMA1_CHANNEL5 => timer::UpdateInterruptHandler<peripherals::TIM1>;
+    
+    
+When the app is running fine, though, and I read this register, it fluctuates between:
+
+0x01B
+0x01F
+
+and also (when USB is being read)
+
+0x024
+
+I'm not sure how Claude knew 0x024 was USB --- I'd like to see this in a datasheet
+
+the enum values in https://docs.embassy.dev/embassy-stm32/git/stm32f103c8/interrupt/enum.Interrupt.html don't match
+
+
+---
+
+- if code is mapped into RAM, it's possible stack could clobber it if it's too big.
+debuggers
+  - uses jetbrains integrated debugger in RustRover.
+  - espressif has onboard debugger over USB
+  - set breakpoints, watchpoints etc.
+  - break on interrupt
+  
+  
+---
+
+crash still occurs when debugger data cables disconnected
+
+
+tried adding my own hardfault handler
+
+use cortex_m_rt::{exception, ExceptionFrame};
+#[exception]
+unsafe fn HardFault(ef: &ExceptionFrame) -> ! {
+    loop {}
+}
+
+but didn't end up there on the freeze. (all registers point to 0x2100_0000
+  
+port install gdb +multiarch
+
+break on exception.
+
 
 
 ### Aug 5 - debugging

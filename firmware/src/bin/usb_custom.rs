@@ -9,7 +9,7 @@ use embassy_futures::join::join;
 use embassy_stm32::adc::Adc;
 use embassy_stm32::gpio::{Flex, Level, Output, Speed};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{adc, bind_interrupts, peripherals, usb, Config};
+use embassy_stm32::{adc, bind_interrupts, peripherals, timer, usb, Config};
 use embassy_time::Timer;
 use embassy_usb::driver::{Endpoint, EndpointIn, EndpointOut};
 use embassy_usb::Builder;
