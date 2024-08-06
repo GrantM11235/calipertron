@@ -40,6 +40,23 @@ Install:
     rye sync
 
 ## Log
+### Aug 6
+
+Had a chat with Mitko.
+Look into "pulse density modulation" for signal generation. Also read color university paper in repo. Mitko will add patent too.
+
+---
+
+Looking more into minimal reproducible example for the hang I've been running into.
+
+It seems like the issue may be resolved by doing a full power reset when flashing new firmware.
+So maybe something about the USB bus is getting corrupted in such a way that causes the later hang?
+
+I do need to trigger interrupt when USB disconnects --- right now the USB tasks just hang in wfe.
+(discovered this via unplugging and then Ctrl-C probe-run, which listed /Users/dev/.cargo/git/checkouts/embassy-9312dcb0ed774b29/46aa206/embassy-executor/src/arch/cortex_m.rs:106:21)
+
+
+
 ### Aug 5 - debugging
 
 
