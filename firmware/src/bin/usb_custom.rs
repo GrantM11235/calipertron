@@ -5,11 +5,10 @@ use schema::*;
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_futures::join::join;
 use embassy_stm32::adc::Adc;
 use embassy_stm32::gpio::{Flex, Level, Output, Speed};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{adc, bind_interrupts, peripherals, timer, usb, Config};
+use embassy_stm32::{adc, bind_interrupts, peripherals, usb, Config};
 use embassy_time::Timer;
 use embassy_usb::driver::{Endpoint, EndpointIn, EndpointOut};
 use embassy_usb::Builder;
@@ -259,7 +258,16 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    join(fut_commands, join(fut_usb, fut_stream_adc)).await;
+    // Pinning and using join_array saves 1kB of flash compared to join3. (Presumably reduced code size.)
+    // embassy_futures::join::join3(fut_commands, fut_usb, fut_stream_adc).await;
+
+    let fut_commands = core::pin::pin!(fut_commands);
+    let fut_usb = core::pin::pin!(fut_usb);
+    let fut_stream_adc = core::pin::pin!(fut_stream_adc);
+
+    let futures: [core::pin::Pin<&mut dyn core::future::Future<Output = _>>; 3] =
+        [fut_commands, fut_usb, fut_stream_adc];
+    embassy_futures::join::join_array(futures).await;
 }
 
 static SIGNAL: [u32; 132] = [
