@@ -189,8 +189,13 @@ async fn main(_spawner: Spawner) {
 
     const PIN_CHANNEL: u8 = 9; // PB1 is on channel 9 for STM32F103
     adc.sqr3().modify(|w| w.set_sq(0, PIN_CHANNEL));
-    adc.smpr2()
-        .modify(|w| w.set_smp(PIN_CHANNEL as usize, adc::SampleTime::CYCLES239_5));
+    adc.smpr2().modify(|w| {
+        w.set_smp(
+            PIN_CHANNEL as usize,
+            //adc::SampleTime::CYCLES239_5
+            adc::SampleTime::CYCLES71_5,
+        )
+    });
 
     // Start ADC conversions
     adc.cr2().modify(|w| w.set_adon(true));

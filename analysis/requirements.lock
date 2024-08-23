@@ -6,6 +6,8 @@
 #   features: []
 #   all-features: false
 #   with-sources: false
+#   generate-hashes: false
+#   universal: false
 
 -e file:.
 appnope==0.1.4
@@ -55,6 +57,7 @@ matplotlib==3.8.4
     # via calipertron
     # via ipympl
     # via plotnine
+    # via seaborn
 matplotlib-inline==0.1.7
     # via ipykernel
     # via ipython
@@ -72,6 +75,7 @@ numpy==1.26.4
     # via patsy
     # via plotnine
     # via scipy
+    # via seaborn
     # via statsmodels
 packaging==24.0
     # via ipykernel
@@ -81,6 +85,7 @@ pandas==2.2.2
     # via calipertron
     # via mizani
     # via plotnine
+    # via seaborn
     # via statsmodels
 parso==0.8.4
     # via jedi
@@ -120,6 +125,8 @@ scipy==1.14.0
     # via mizani
     # via plotnine
     # via statsmodels
+seaborn==0.13.2
+    # via calipertron
 six==1.16.0
     # via asttokens
     # via patsy

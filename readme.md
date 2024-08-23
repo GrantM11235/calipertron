@@ -40,6 +40,32 @@ Install:
     rye sync
 
 ## Log
+### Aug 23 - signal analysis
+Recording coupled signals and trying to decode them in Python.
+
+Sampling rate is driven by ADC sample time (assuming no DMA overrun / drop out for simplicity)
+
+1. System clock (HCLK) = 72 MHz
+2. APB2 clock = 72 MHz / 2 = 36 MHz (maximum allowed for APB2)
+3. ADC clock = 36 MHz / 2 = 18 MHz (The ADC clock is further divided by 2 from APB2)
+
+ADC freq (/ (* 18 1e6) 239.5) =>  75.156 kHz
+ADC freq (/ (* 18 1e6) 71.5)  => 251.748 kHz
+
+PDM array has 132 entries, so assuming that's one period then the sinusoidal drive signal frequency is (/ 100000 132.0) => 757.57 Hz
+
+
+---
+
+I'm not sure how to process the captured signal.
+It's not a simple PDM because the amplitude isn't binary.
+
+Maybe I should try just emitting a single GPIO signal and seeing if I can reconstruct that first?
+
+
+
+
+
 ### Aug 6
 
 Had a chat with Mitko.
