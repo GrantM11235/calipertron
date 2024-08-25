@@ -62,6 +62,26 @@ It's not a simple PDM because the amplitude isn't binary.
 
 Maybe I should try just emitting a single GPIO signal and seeing if I can reconstruct that first?
 
+Okay, yeah, that definitely looks more like a PDM signal.
+So the modulation I'm getting probably really is the desired effect of the signals combining.
+I wonder if I should just do a rolling window and calculate variance and then take the minimum of that or something?
+
+---
+
+Verifying the PDM by importing the drive signal into python and analyzing, we match the expected 757.58 drive frequency. Cool.
+
+---
+
+If I take a rolling 20-sample window of the high-pass filtered signal, I get a decent looking sine wave.
+However, the frequency is 2670 Hz. Where does this come from?
+
+
+Ahh, it's not really a clean frequency. I can fit 10-ish cycles, but not more than that.
+Manually playing with the curve fit I can see it's not lining up nicely.
+The spectrogram isn't super clean, but there's a peak much higher than the rest at 2668 Hz, basically the same as we saw above.
+
+
+
 
 
 
