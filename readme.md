@@ -40,19 +40,22 @@ Install:
     rye sync
 
 ## Log
-### Aug 23 - signal analysis
+
+### Aug 23/24/25 - signal analysis
 Recording coupled signals and trying to decode them in Python.
 
 Sampling rate is driven by ADC sample time (assuming no DMA overrun / drop out for simplicity)
 
 1. System clock (HCLK) = 72 MHz
-2. APB2 clock = 72 MHz / 2 = 36 MHz (maximum allowed for APB2)
-3. ADC clock = 36 MHz / 2 = 18 MHz (The ADC clock is further divided by 2 from APB2)
+2. APB2 clock = 72 MHz
+3. ADC clock = 72 MHz / 6 = 12 MHz (14 MHz max)
 
 ADC freq (/ (* 18 1e6) 239.5) =>  75.156 kHz
 ADC freq (/ (* 18 1e6) 71.5)  => 251.748 kHz
 
-PDM array has 132 entries, so assuming that's one period then the sinusoidal drive signal frequency is (/ 100000 132.0) => 757.57 Hz
+PDM array has 132 entries, so assuming that's one period then the sinusoidal drive signal frequency is
+(/ 100000 132.0) => 757.57 Hz
+(/  50000 132.0) => 378.79 Hz
 
 
 ---
@@ -69,6 +72,8 @@ I wonder if I should just do a rolling window and calculate variance and then ta
 ---
 
 Verifying the PDM by importing the drive signal into python and analyzing, we match the expected 757.58 drive frequency. Cool.
+Though this may be begging the question since the calcs use the drive rate, which is derived assuming the ADC clock stuff above is correct.
+Let's see if we can recover it from a single signal
 
 ---
 
@@ -81,9 +86,87 @@ Manually playing with the curve fit I can see it's not lining up nicely.
 The spectrogram isn't super clean, but there's a peak much higher than the rest at 2668 Hz, basically the same as we saw above.
 
 
+----
+
+Hmm, lets look at the coupled signal with just a single drive PDM.
+With 2000Hz PDM cutoff, there's a strong peak at 1385 Hz.
+
+Maybe the drive timer is actually off?
+After all, Embassy is probably doing some rounding or whatever to set the frequency. But by almost 2x? That seems pretty bad.
+
+Let's try with 10kHz timer (PDM drive rate)
+
+no real luck. though maybe I'm removing the signal with the low pass filter that I used to eliminate the line noise?
+If I look at max power without low pass filter, it's around 84 Hz which is close to the 76 Hz theoretical.
+
+I should crank up the PDM tick so that the generated signal is well above 50 Hz.
+
+Going back to the 100kHz tick (757 Hz drive)
+
+the unfiltered peak is 84 Hz still (???)
+AHHH, is that microcontroller noise? Nah, that's 72 MHz.
+Hmm, power grid here should be about 50 Hz.
+
+Okay, did another recording of just line noise and it's still coming out at 83.92 Hz.
+So the ADC sample rate must be off.
+
+Yeah, Claude bullshitted me. Looking at the clock tree it says ADC max is 14 MHz.
+let's look at registers with cube debugger
+PLLMUL => pll input clock x 9
+
+HPRE = AHB prescaler, SYSCLK not divided
+PPRE2 = APB2 prescaler HCLK not divided
+ADCPRE = PCLK2 divided by 6
+
+Okay, so assuming we're at max SYSCLK of 72 MHz, that gives ADC clock of 12 MHz.
+
+Adjusting for this, line noise frequency (FFT of raw data) comes out to 58.74 Hz, which is pretty off.
+
+Hmm, maybe that's correlated noise from shorter sample time.
+When I use the longest ADC sampling time, the collected data gives 52.61 Hz.
+If I software filter out noise above 100 Hz, then it's 50.10 Hz.
 
 
+Let's collect more driven data using this longer sample time.
 
+Okay! Peak is at 796 Hz. That's close to 757 Hz drive, I guess.
+
+What if I do 50?
+Hmm, seeing two peaks, biggest at 1195 Hz.
+Not sure how this makes sense, since I'm filtering loss pass with 1000 Hz cutoff
+
+If I tweak the filtering, I can recover 737 Hz.
+
+GPIO speed shoudln't be an issue, it's set to slowest but that's 2 MHz.
+
+Taking line noise again with longest sample time, FFT shows peak at 52.61 Hz again.
+
+I don't think it's a hardware thing, I measured on bluepill too.
+Holding the cable really helps.
+
+---
+
+I measured line noise with my scope, it's definietly just 50 Hz.
+MCU clock doesn't seem to be a problem, since if I emit a 1kHz signal on the GPIO the scope measures it as 1.00 kHz.
+Emitting 50 Hz signal measures as 50.00 Hz. So MCU clock seems aight.
+
+Possible the issue is related to DMA dropping occasional samples and the larger signal getting out of sync?
+If that were the case, I should see freq get "more accurate" with less data.
+
+Nah, changing the offsets and amonut doesn't move it much, still around 52.6 Hz.
+Maybe it's roundoff / numerical error on the python FFT impl?
+That seems quite unlikely, but not sure what else it might be.
+
+---
+
+Recording the MCU's generated 50Hz square wave with the ADC and analyzing in the computer gives 52.89 Hz FFT.
+
+Ah, found the issue! ADC converstion time is sampling duration + a 12.5 cycle overhead.
+ADding that in gives me FFT on generated signal of 50.01 Hz.
+
+---
+
+Now looking at a single PDM waveform ticked out at 100 kHz (implied 757.6 Hz signal), high pass above 500 Hz to remove line-noise and low pass under 1000 Hz I see just a single peak at 758 Hz. Nice!
 
 
 ### Aug 6

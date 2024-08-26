@@ -192,8 +192,8 @@ async fn main(_spawner: Spawner) {
     adc.smpr2().modify(|w| {
         w.set_smp(
             PIN_CHANNEL as usize,
-            //adc::SampleTime::CYCLES239_5
-            adc::SampleTime::CYCLES71_5,
+            adc::SampleTime::CYCLES239_5,
+            //adc::SampleTime::CYCLES71_5,
         )
     });
 
