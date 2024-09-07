@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-
 use schema::*;
 
 use defmt::*;
@@ -8,7 +7,7 @@ use embassy_executor::Spawner;
 use embassy_stm32::adc::Adc;
 use embassy_stm32::gpio::{Flex, Level, Output, Speed};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{adc, bind_interrupts, peripherals, usb, Config};
+use embassy_stm32::{adc, bind_interrupts, interrupt, peripherals, usb, Config};
 use embassy_time::Timer;
 use embassy_usb::driver::{Endpoint, EndpointIn, EndpointOut};
 use embassy_usb::Builder;
@@ -69,16 +68,39 @@ async fn main(_spawner: Spawner) {
         Output::new(p.PA7, Level::Low, Speed::Low),
     ];
 
-    let tim = embassy_stm32::timer::low_level::Timer::new(p.TIM1);
-    let timer_registers = tim.regs_advanced();
+    let tim = embassy_stm32::timer::low_level::Timer::new(p.TIM2);
+    let timer_registers = tim.regs_gp16();
     timer_registers
         .cr2()
         .modify(|w| w.set_ccds(embassy_stm32::pac::timer::vals::Ccds::ONUPDATE));
-    timer_registers.dier().modify(|w| w.set_ude(true)); // Enable update DMA request
+    timer_registers.dier().modify(|w| {
+        // Enable update DMA request
+        w.set_ude(true);
+        // Enable update interrupt request
+        w.set_uie(true);
+    });
 
-    tim.set_frequency(Hertz(1_000));
+    tim.set_frequency(Hertz(100_000));
+    //tim.start();
 
-    tim.start();
+    let _debug_pin = Output::new(p.PB7, Level::Low, Speed::Low); // use SDA as debug pin for scope
+    unsafe { cortex_m::peripheral::NVIC::unmask(embassy_stm32::pac::Interrupt::TIM2) };
+
+    static mut DRIVE_N: usize = 0;
+    #[interrupt]
+    unsafe fn TIM2() {
+        embassy_stm32::pac::TIM2.sr().modify(|w| w.set_uif(false));
+        DRIVE_N += 1;
+        if 0 == DRIVE_N % SIGNAL.len() {
+            embassy_stm32::pac::GPIOB
+                .bsrr()
+                .write(|w| w.set_bs(7, true))
+        } else {
+            embassy_stm32::pac::GPIOB
+                .bsrr()
+                .write(|w| w.set_br(7, true))
+        }
+    }
 
     use embassy_stm32::dma::*;
     let gpioa = embassy_stm32::pac::GPIOA;
@@ -86,10 +108,10 @@ async fn main(_spawner: Spawner) {
     let mut opts = TransferOptions::default();
     opts.circular = true;
 
-    let request = embassy_stm32::timer::UpDma::request(&p.DMA1_CH5);
+    let request = embassy_stm32::timer::UpDma::request(&p.DMA1_CH2);
     let _transfer = unsafe {
         Transfer::new_write(
-            p.DMA1_CH5,
+            p.DMA1_CH2,
             request,
             &SIGNAL,
             gpioa.bsrr().as_ptr() as *mut u32,
@@ -209,6 +231,7 @@ async fn main(_spawner: Spawner) {
 
         // Start handling DMA requests from ADC
         adc_rb.start();
+
         let mut buf = [0; SAMPLES_PER_PACKET];
         loop {
             loop {
@@ -249,7 +272,11 @@ async fn main(_spawner: Spawner) {
                         info!("Received command: {:?}", command);
                         match command {
                             Command::SetFrequency { frequency_kHz } => {
+                                tim.stop();
+                                tim.reset();
+
                                 tim.set_frequency(Hertz((frequency_kHz * 1000.) as u32));
+                                tim.start();
                             }
                         }
                     } else {
