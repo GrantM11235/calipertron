@@ -41,6 +41,17 @@ Install:
 
 ## Log
 
+### Sept 9
+
+Got new PCB scale from Dimitar with correct measurements.
+Added new firmware to do "one shot" recording of 32 cycles, rather than trying to do it continously and stream to usb (the phase offset of the initial start was inconsistent here).
+
+I verified with the python analysis notebook that the results are pretty repeatable.
+I.e., multiple measurements at same location give phase offset repeatable to about 0.1 radians.
+Moving the scale reliably changes the phase offset.
+
+Should be straightforward to update the notebook to "poll" continuously and then get a live plot to mess with.
+
 ### Aug 23/24/25 - signal analysis
 Recording coupled signals and trying to decode them in Python.
 

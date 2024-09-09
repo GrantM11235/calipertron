@@ -5,9 +5,10 @@ use schema::*;
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::adc::Adc;
+use embassy_stm32::dma::*;
 use embassy_stm32::gpio::{Flex, Level, Output, Speed};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{adc, bind_interrupts, interrupt, peripherals, usb, Config};
+use embassy_stm32::{adc, bind_interrupts, peripherals, usb, Config};
 use embassy_time::Timer;
 use embassy_usb::driver::{Endpoint, EndpointIn, EndpointOut};
 use embassy_usb::Builder;
@@ -20,6 +21,9 @@ bind_interrupts!(struct Irqs {
 
 const MAX_PACKET_SIZE: u8 = 64;
 const SAMPLES_PER_PACKET: usize = (MAX_PACKET_SIZE as usize) / 2; // 2 bytes per sample
+const PDM_LENGTH: usize = 132;
+const NUM_SAMPLES: usize = 32 * PDM_LENGTH;
+
 pub const USB_CLASS_CUSTOM: u8 = 0xFF;
 const USB_SUBCLASS_CUSTOM: u8 = 0x00;
 const USB_PROTOCOL_CUSTOM: u8 = 0x00;
@@ -81,42 +85,26 @@ async fn main(_spawner: Spawner) {
     });
 
     tim.set_frequency(Hertz(100_000));
-    //tim.start();
 
-    let _debug_pin = Output::new(p.PB7, Level::Low, Speed::Low); // use SDA as debug pin for scope
-    unsafe { cortex_m::peripheral::NVIC::unmask(embassy_stm32::pac::Interrupt::TIM2) };
+    let start_pdm = || unsafe {
+        let mut opts = TransferOptions::default();
+        opts.circular = true;
 
-    static mut DRIVE_N: usize = 0;
-    #[interrupt]
-    unsafe fn TIM2() {
-        embassy_stm32::pac::TIM2.sr().modify(|w| w.set_uif(false));
-        DRIVE_N += 1;
-        if 0 == DRIVE_N % SIGNAL.len() {
-            embassy_stm32::pac::GPIOB
-                .bsrr()
-                .write(|w| w.set_bs(7, true))
-        } else {
-            embassy_stm32::pac::GPIOB
-                .bsrr()
-                .write(|w| w.set_br(7, true))
-        }
-    }
+        let dma_ch = embassy_stm32::Peripheral::clone_unchecked(&p.DMA1_CH2);
+        let request = embassy_stm32::timer::UpDma::request(&dma_ch);
 
-    use embassy_stm32::dma::*;
-    let gpioa = embassy_stm32::pac::GPIOA;
+        tim.reset();
 
-    let mut opts = TransferOptions::default();
-    opts.circular = true;
-
-    let request = embassy_stm32::timer::UpDma::request(&p.DMA1_CH2);
-    let _transfer = unsafe {
-        Transfer::new_write(
-            p.DMA1_CH2,
+        let t = Transfer::new_write(
+            dma_ch,
             request,
             &SIGNAL,
-            gpioa.bsrr().as_ptr() as *mut u32,
+            embassy_stm32::pac::GPIOA.bsrr().as_ptr() as *mut u32,
             opts,
-        )
+        );
+
+        tim.start();
+        t
     };
 
     ////////////////////////
@@ -161,18 +149,22 @@ async fn main(_spawner: Spawner) {
     ////////////////////////
     // ADC + DMA setup
 
-    let mut adc_buffer = [0; 2 * SAMPLES_PER_PACKET];
-    let request = embassy_stm32::adc::RxDma::request(&p.DMA1_CH1);
-    let mut opts = TransferOptions::default();
-    opts.half_transfer_ir = true;
-    let mut adc_rb = unsafe {
-        ReadableRingBuffer::new(
-            p.DMA1_CH1,
+    let start_adc = |sample_buf| unsafe {
+        let dma_ch = embassy_stm32::Peripheral::clone_unchecked(&p.DMA1_CH1);
+        let request = embassy_stm32::adc::RxDma::request(&dma_ch);
+        let opts = TransferOptions::default();
+
+        let t = Transfer::new_read(
+            dma_ch,
             request,
             embassy_stm32::pac::ADC1.dr().as_ptr() as *mut u16,
-            &mut adc_buffer,
+            sample_buf,
             opts,
-        )
+        );
+
+        // Start ADC conversions
+        embassy_stm32::pac::ADC1.cr2().modify(|w| w.set_adon(true));
+        t
     };
 
     let mut adc = Adc::new(p.ADC1);
@@ -219,49 +211,16 @@ async fn main(_spawner: Spawner) {
         )
     });
 
-    // Start ADC conversions
-    adc.cr2().modify(|w| w.set_adon(true));
-
-    ////////////////////////
-    // Stream ADC data to host
-
-    let fut_stream_adc = async {
-        // Wait for USB to connect
-        write_ep.wait_enabled().await;
-
-        // Start handling DMA requests from ADC
-        adc_rb.start();
-
-        let mut buf = [0; SAMPLES_PER_PACKET];
-        loop {
-            loop {
-                let r = adc_rb.read_exact(&mut buf).await;
-
-                if r.is_err() {
-                    error!("ADC_RB error: {:?}", r);
-                    break;
-                }
-
-                for x in buf.iter_mut() {
-                    *x = convert_to_millivolts(*x);
-                }
-
-                let r = write_ep.write(bytemuck::cast_slice(&buf)).await;
-                if r.is_err() {
-                    error!("USB Error: {:?}", r);
-                    break;
-                }
-            }
-
-            adc_rb.clear();
-        }
-    };
-
     //////////////////////////
     // handle commands from host
     let fut_commands = async {
         // Wait for USB to connect
         read_ep.wait_enabled().await;
+
+        // Wait for USB to connect
+        write_ep.wait_enabled().await;
+
+        info!("Ready");
 
         loop {
             let mut command_buf = [0u8; MAX_PACKET_SIZE as usize];
@@ -270,16 +229,47 @@ async fn main(_spawner: Spawner) {
                 Ok(size) => {
                     if let Some(command) = Command::deserialize(&command_buf[..size]) {
                         info!("Received command: {:?}", command);
+                        use Command::*;
                         match command {
-                            Command::SetFrequency { frequency_kHz } => {
-                                tim.stop();
-                                tim.reset();
-
+                            SetFrequency { frequency_kHz } => {
                                 tim.set_frequency(Hertz((frequency_kHz * 1000.) as u32));
-                                tim.start();
                             }
-                            x => {
-                                defmt::todo!("Can't handle: {}", x)
+
+                            // would be nice to extract this, but async closures aren't stable yet and no way in hell I'm going to write out the types.
+                            Record => {
+                                // TODO: I'd rather this be local, but Transfer requires the buffer have the same lifetime as the DMA channel for some reason.
+                                static mut ADC_BUF: [u16; NUM_SAMPLES] = [0u16; NUM_SAMPLES];
+
+                                let buf = unsafe { &mut ADC_BUF[..] };
+
+                                // start ADC
+                                let adc_transfer = start_adc(buf);
+
+                                // start PDM
+                                let mut pdm_transfer = start_pdm();
+
+                                // wait for all of the samples to be taken
+                                adc_transfer.await;
+                                // TODO: why am I getting errors about multiple mutable borrows --- shouldn't awaiting the adc_transfer above end the borrow?
+                                let buf = unsafe { &mut ADC_BUF[..] };
+
+                                pdm_transfer.request_stop();
+
+                                // now we can send the collected results back to the host
+
+                                for x in buf.iter_mut() {
+                                    *x = convert_to_millivolts(*x);
+                                }
+                                for c in buf.chunks(SAMPLES_PER_PACKET) {
+                                    let r = write_ep.write(bytemuck::cast_slice(c)).await;
+                                    if r.is_err() {
+                                        error!("USB Error: {:?}", r);
+                                        break;
+                                    }
+                                }
+
+                                // make sure everything is reset before we continue
+                                pdm_transfer.await;
                             }
                         }
                     } else {
@@ -298,14 +288,13 @@ async fn main(_spawner: Spawner) {
 
     let fut_commands = core::pin::pin!(fut_commands);
     let fut_usb = core::pin::pin!(fut_usb);
-    let fut_stream_adc = core::pin::pin!(fut_stream_adc);
 
-    let futures: [core::pin::Pin<&mut dyn core::future::Future<Output = _>>; 3] =
-        [fut_commands, fut_usb, fut_stream_adc];
+    let futures: [core::pin::Pin<&mut dyn core::future::Future<Output = _>>; 2] =
+        [fut_usb, fut_commands];
     embassy_futures::join::join_array(futures).await;
 }
 
-static SIGNAL: [u32; 132] = [
+static SIGNAL: [u32; PDM_LENGTH] = [
     0b00000000010101010000000010101010,
     0b00000000010101010000000010101010,
     0b00000000011010100000000010010101,

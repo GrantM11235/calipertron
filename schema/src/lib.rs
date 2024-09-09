@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[allow(non_snake_case)]
 pub enum Command {
     SetFrequency { frequency_kHz: f64 },
+    Record,
 }
 
 impl Command {

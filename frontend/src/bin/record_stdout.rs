@@ -20,7 +20,10 @@ fn main() {
     // Send frequency command to firmware
     let endpoint_addr = 1;
     let mut out_queue = interface.bulk_out_queue(endpoint_addr);
-    send_frequency_command(&mut out_queue, frequency_kHz);
+
+    send_command(&mut out_queue, Command::SetFrequency { frequency_kHz });
+
+    send_command(&mut out_queue, Command::Record);
 
     // Read and print ADC values
     let mut queue = interface.bulk_in_queue(0x80 + endpoint_addr);
@@ -37,7 +40,6 @@ fn main() {
         for chunk in data.chunks_exact(2) {
             if let [low, high] = chunk {
                 let adc_value = u16::from_le_bytes([*low, *high]);
-                //println!("ADC value: {} mV", adc_value);
                 println!("{}", adc_value);
             }
         }
@@ -64,13 +66,12 @@ fn parse_frequency_arg() -> f64 {
     }
 }
 
-fn send_frequency_command(out_queue: &mut nusb::transfer::Queue<Vec<u8>>, frequency_kHz: f64) {
-    let command = Command::SetFrequency { frequency_kHz };
+fn send_command(out_queue: &mut nusb::transfer::Queue<Vec<u8>>, command: Command) {
     let mut buf = [0u8; 64]; // Assuming MAX_PACKET_SIZE is 64
     if let Ok(serialized) = command.serialize(&mut buf) {
         out_queue.submit(serialized.into());
     } else {
-        eprintln!("Error: Failed to serialize frequency command");
+        eprintln!("Error: Failed to serialize command");
         std::process::exit(1);
     }
 }
