@@ -41,6 +41,30 @@ Install:
 
 ## Log
 
+### Sept 11
+
+Doing FFT on stm32f103:
+
+ 44.3ms to sample
+138.0ms to sample + 2048 FFT.
+141.0ms to sample + 2048 FFT + arctan phase calculation for 5 bins.
+
+Presumably takes forever because we don't have a floating point unit.
+For better performance we could probably do the DFT only for the target bin.
+
+Looks like we're split across bins 32 and 33. Need to tweak signal and sampling rates so all energy is centered in one bin.
+
+30: 172994200.0	-0.6752128
+31: 440644960.0	-0.7401424
+32: 3207128000.0	-0.7714465
+33: 6121130500.0	2.3279614
+34: 512542240.0	2.2985573
+
+over 25 measurements without moving the slide, bin 33 phase is 2.33 +/- 0.045.
+
+Would be nice if it's a bit steadier.
+
+
 ### Sept 9
 
 Got new PCB scale from Dimitar with correct measurements.
