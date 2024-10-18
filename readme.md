@@ -39,7 +39,29 @@ Install:
 
     rye sync
 
+
+## Open questions / TODO
+
+- Add hardware low-pass filter to emitted PDM signal?
+- Work out theoretical justification for PDM and sampling frequencies? (i.e., far from (mulitples of) line noise, coupling efficiency between transmit and reflect PCBs, etc.)
+
+- try simple cross correlation in python
+- write param sweep firmware/script:
+  - set PDM frequency and ADC sample rate
+  - record 100 cycles
+  - save to disk
+
+
 ## Log
+
+### Oct 18
+
+Haven't had much luck using Z3 to find optimal FFT settings, search space as I set it up is probably too bug.
+
+I'm likely going about this the wrong way, anyway --- it's probably much better to just pick the PDM signal frequency to be something that's not a multiple of 50 or 60 Hz line noise, then extract the phase by cross-correlating with the known frequency
+
+Nice overview of PDM theory https://tomverbeure.github.io/2020/10/04/PDM-Microphones-and-Sigma-Delta-Conversion.html
+
 
 ### Sept 11
 
