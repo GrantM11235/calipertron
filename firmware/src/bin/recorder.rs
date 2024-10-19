@@ -179,7 +179,7 @@ async fn main(_spawner: Spawner) {
     };
     info!("VREFINT: {}", vrefint_sample);
 
-    let convert_to_millivolts = |sample| (sample as u32 * adc::VREF_INT / vrefint_sample) as u16;
+    //let convert_to_millivolts = |sample| (sample as u32 * adc::VREF_INT / vrefint_sample) as u16;
 
     // Configure ADC for continuous conversion with DMA
     let adc = embassy_stm32::pac::ADC1;
@@ -257,9 +257,9 @@ async fn main(_spawner: Spawner) {
 
                                 // now we can send the collected results back to the host
 
-                                for x in buf.iter_mut() {
-                                    *x = convert_to_millivolts(*x);
-                                }
+                                // for x in buf.iter_mut() {
+                                //     *x = convert_to_millivolts(*x);
+                                // }
                                 for c in buf.chunks(SAMPLES_PER_PACKET) {
                                     let r = write_ep.write(bytemuck::cast_slice(c)).await;
                                     if r.is_err() {

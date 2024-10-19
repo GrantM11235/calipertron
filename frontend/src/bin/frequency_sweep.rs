@@ -30,7 +30,7 @@ fn main() {
     let mut queue = interface.bulk_in_queue(0x80 + endpoint_addr);
     let transfer_size = 64;
 
-    for frequency_kHz in (100..1000).step_by(20) {
+    for frequency_kHz in (50..150).step_by(1) {
         send_command(
             &mut out_queue,
             Command::SetFrequency {

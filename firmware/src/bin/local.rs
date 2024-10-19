@@ -7,15 +7,13 @@ use embassy_stm32::dma::*;
 use embassy_stm32::gpio::{Flex, Level, Output, Speed};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{adc, Config};
-use num_traits::float::Float;
+
+use num_traits::Float;
 
 use {defmt_rtt as _, panic_probe as _};
 
 const PDM_LENGTH: usize = 132;
-const NUM_SAMPLES: usize = 16 * PDM_LENGTH;
-
-// TODO: static assert this is less than NUM_SAMPLES
-const FFT_SIZE: usize = 2048;
+const NUM_SAMPLES: usize = SINE_COSINE_TABLE.len();
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -147,7 +145,6 @@ async fn main(_spawner: Spawner) {
         loop {
             // TODO: I'd rather this be local, but Transfer requires the buffer have the same lifetime as the DMA channel for some reason.
             static mut ADC_BUF: [u16; NUM_SAMPLES] = [0u16; NUM_SAMPLES];
-            static mut FFT_BUF: [f32; FFT_SIZE] = [0f32; FFT_SIZE];
 
             let adc_buf = unsafe { &mut ADC_BUF[..] };
             let adc_transfer = start_adc(adc_buf);
@@ -156,40 +153,28 @@ async fn main(_spawner: Spawner) {
             adc_transfer.await;
             pdm_transfer.request_stop();
 
-            // TODO: why am I getting errors about multiple mutable borrows --- shouldn't awaiting the adc_transfer above end the borrow?
-            let adc_buf = unsafe { &mut ADC_BUF[..] };
-            let fft_buf = unsafe { &mut FFT_BUF };
+            let mut sum_sine: f32 = 0.0;
+            let mut sum_cosine: f32 = 0.0;
 
-            for i in 0..FFT_SIZE {
-                fft_buf[i] = adc_buf[i] as f32;
+            let adc_buf = unsafe { &ADC_BUF[..] };
+
+            for i in 0..NUM_SAMPLES {
+                let (sine, cosine) = SINE_COSINE_TABLE[i];
+                sum_sine += adc_buf[i] as f32 * sine;
+                sum_cosine += adc_buf[i] as f32 * cosine;
             }
-            let fft = microfft::real::rfft_2048(fft_buf);
-
-            let adc_frequency = 12_000_000.;
-            let adc_sample_cycles = 239.5;
-            let adc_sample_overhead_cycles = 12.5; // see reference manual section 11.6
-            let sampling_frequency =
-                adc_frequency / (adc_sample_cycles + adc_sample_overhead_cycles);
-
-            let frequency_bin =
-                |f: f32| ((FFT_SIZE as f32 * f) / sampling_frequency).floor() as usize;
-
-            let phase = |c: microfft::Complex32| c.im.atan2(c.re);
-
-            // expect peak around 750--760 Hz
-            for m in frequency_bin(700.)..(frequency_bin(800.) + 1) {
-                info!("{}: {:?}\t{:?}", m, fft[m].norm_sqr(), phase(fft[m]));
-            }
-            info!("\n");
+            let phase = sum_sine.atan2(sum_cosine);
+            info!("Phase: {}", phase);
 
             // make sure everything is reset before we continue
             pdm_transfer.await;
-            info!("done");
         }
     };
 
     fut_main.await
 }
+
+include!(concat!(env!("OUT_DIR"), "/sine_cosine_table.rs"));
 
 static SIGNAL: [u32; PDM_LENGTH] = [
     0b00000000010101010000000010101010,
