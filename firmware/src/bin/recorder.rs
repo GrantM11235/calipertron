@@ -22,7 +22,7 @@ bind_interrupts!(struct Irqs {
 const MAX_PACKET_SIZE: u8 = 64;
 const SAMPLES_PER_PACKET: usize = (MAX_PACKET_SIZE as usize) / 2; // 2 bytes per sample
 const PDM_LENGTH: usize = 132;
-const NUM_SAMPLES: usize = 32 * PDM_LENGTH;
+const NUM_SAMPLES: usize = SAMPLES_PER_PACKET * 64;
 
 pub const USB_CLASS_CUSTOM: u8 = 0xFF;
 const USB_SUBCLASS_CUSTOM: u8 = 0x00;

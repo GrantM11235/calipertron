@@ -54,13 +54,23 @@ Install:
 
 ## Log
 
-### Oct 18
+
+
+### Oct 18/19 - frequency scan; phase via cross correlation
 
 Haven't had much luck using Z3 to find optimal FFT settings, search space as I set it up is probably too bug.
 
 I'm likely going about this the wrong way, anyway --- it's probably much better to just pick the PDM signal frequency to be something that's not a multiple of 50 or 60 Hz line noise, then extract the phase by cross-correlating with the known frequency
 
 Nice overview of PDM theory https://tomverbeure.github.io/2020/10/04/PDM-Microphones-and-Sigma-Delta-Conversion.html
+
+---
+
+How many periods of the emitted signal should we capture?
+Also, does it matter if the number of samples line up with the signal?
+I don't think it really does, since we know the signal frequency.
+
+For simplicity, lets just record a fixed number of samples for each emission frequency.
 
 
 ### Sept 11
