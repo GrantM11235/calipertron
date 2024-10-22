@@ -85,6 +85,7 @@ name = "calipertron"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "calipertron-core",
  "cortex-m",
  "cortex-m-rt",
  "defmt",
@@ -102,6 +103,13 @@ dependencies = [
  "panic-probe",
  "schema",
  "static_cell",
+]
+
+[[package]]
+name = "calipertron-core"
+version = "0.1.0"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]

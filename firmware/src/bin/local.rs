@@ -1,13 +1,16 @@
 #![no_std]
 #![no_main]
 
+use calipertron_core::*;
+
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_stm32::dma::*;
-use embassy_stm32::gpio::{Flex, Level, Output, Speed};
+use embassy_stm32::gpio::{Flex, Input, Level, Output, Speed};
 use embassy_stm32::time::Hertz;
 use embassy_stm32::{adc, Config};
 
+use embassy_time::Duration;
 use num_traits::Float;
 
 use {defmt_rtt as _, panic_probe as _};
@@ -141,6 +144,10 @@ async fn main(_spawner: Spawner) {
         )
     });
 
+    let user_button = Input::new(p.PB14, embassy_stm32::gpio::Pull::None);
+
+    let mut position_estimator = PositionAccumulator::new(0.0, 0.1);
+
     let fut_main = async {
         loop {
             // TODO: I'd rather this be local, but Transfer requires the buffer have the same lifetime as the DMA channel for some reason.
@@ -164,10 +171,20 @@ async fn main(_spawner: Spawner) {
                 sum_cosine += adc_buf[i] as f32 * cosine;
             }
             let phase = sum_sine.atan2(sum_cosine);
-            info!("Phase: {}", phase);
+
+            position_estimator.update(phase);
+            info!("Phase: {} Position: {}", phase, position_estimator.position);
 
             // make sure everything is reset before we continue
             pdm_transfer.await;
+
+            ///////////////////////
+            // handle button press
+
+            if user_button.is_low() {
+                info!("Button pressed, zeroing");
+                position_estimator.position = 0.;
+            }
         }
     };
 

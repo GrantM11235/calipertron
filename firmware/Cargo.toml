@@ -6,6 +6,7 @@ authors = ["Kevin J. Lynagh <kevin@keminglabs.com>"]
 
 [dependencies]
 schema = { path = "../schema" }
+calipertron-core = { path = "../calipertron-core" }
 
 embassy-stm32 =    { git = "https://github.com/embassy-rs/embassy", features = ["defmt", "stm32f103c8", "unstable-pac", "memory-x", "time-driver-any"]  }
 embassy-sync =     { git = "https://github.com/embassy-rs/embassy", features = ["defmt"] }
