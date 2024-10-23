@@ -47,13 +47,19 @@ Install:
 
 - try simple cross correlation in python
 - write param sweep firmware/script:
-  - set PDM frequency and ADC sample rate
-  - record 100 cycles
-  - save to disk
+- set PDM frequency and ADC sample rate
+- record 100 cycles
+- save to disk
 
 
 ## Log
 
+### Oct 23 - Do some design simluations to better understand PDM and sampling
+
+Added a new design_simulations notebook to try and understand whether an analog low-pass filter is necessary to smooth the reflected signal before reading by the ADC, or if all of that will wash out in software.
+Seems like it's the latter: Even when we're at the slowest sampling rate we're still getting phase error of just e-14
+Interestingly this is less than the e-12 error of the longest sampling rate --- I guess that's acting as a low pass filter itself and helping a bit.
+(And/or all of this washes out when correlating across 10 full cycles)
 
 
 ### Oct 18/19 - frequency scan; phase via cross correlation
@@ -77,7 +83,7 @@ For simplicity, lets just record a fixed number of samples for each emission fre
 
 Doing FFT on stm32f103:
 
- 44.3ms to sample
+44.3ms to sample
 138.0ms to sample + 2048 FFT.
 141.0ms to sample + 2048 FFT + arctan phase calculation for 5 bins.
 
@@ -86,11 +92,11 @@ For better performance we could probably do the DFT only for the target bin.
 
 Looks like we're split across bins 32 and 33. Need to tweak signal and sampling rates so all energy is centered in one bin.
 
-30: 172994200.0	-0.6752128
-31: 440644960.0	-0.7401424
-32: 3207128000.0	-0.7714465
-33: 6121130500.0	2.3279614
-34: 512542240.0	2.2985573
+30: 172994200.0 -0.6752128
+31: 440644960.0 -0.7401424
+32: 3207128000.0    -0.7714465
+33: 6121130500.0    2.3279614
+34: 512542240.0 2.2985573
 
 over 25 measurements without moving the slide, bin 33 phase is 2.33 +/- 0.045.
 
@@ -253,18 +259,18 @@ I do need to trigger interrupt when USB disconnects --- right now the USB tasks 
 
 Managed to catch and debug registers via STM32Cube.
 ICSR
-  ISRPending 1
-  VectPending 0x024
+ISRPending 1
+VectPending 0x024
 
 
 This vect points to USB stuff, but I didn't see any obvious error flags in the USB registers.
 
 Had another freeze and captured the pending interrupt as 0x01B, which is DMA1_CHANNEL5
 
-// TODO: possible I need to bind 
-    // DMA1_CHANNEL5 => timer::UpdateInterruptHandler<peripherals::TIM1>;
-    
-    
+// TODO: possible I need to bind
+// DMA1_CHANNEL5 => timer::UpdateInterruptHandler<peripherals::TIM1>;
+
+
 When the app is running fine, though, and I read this register, it fluctuates between:
 
 0x01B
@@ -283,12 +289,12 @@ the enum values in https://docs.embassy.dev/embassy-stm32/git/stm32f103c8/interr
 
 - if code is mapped into RAM, it's possible stack could clobber it if it's too big.
 debuggers
-  - uses jetbrains integrated debugger in RustRover.
-  - espressif has onboard debugger over USB
-  - set breakpoints, watchpoints etc.
-  - break on interrupt
-  
-  
+- uses jetbrains integrated debugger in RustRover.
+- espressif has onboard debugger over USB
+- set breakpoints, watchpoints etc.
+- break on interrupt
+
+
 ---
 
 crash still occurs when debugger data cables disconnected
@@ -299,11 +305,11 @@ tried adding my own hardfault handler
 use cortex_m_rt::{exception, ExceptionFrame};
 #[exception]
 unsafe fn HardFault(ef: &ExceptionFrame) -> ! {
-    loop {}
+loop {}
 }
 
 but didn't end up there on the freeze. (all registers point to 0x2100_0000
-  
+
 port install gdb +multiarch
 
 break on exception.
@@ -318,9 +324,9 @@ https://matrix.to/#/!YoLPkieCYHGzdjUhOK:matrix.org/$dOadSX4X9q9CnQEiKhKyZJr5toI8
 
 
 14:49:40 $ /Applications/STMicroelectronics/STM32Cube/STM32CubeProgrammer/STM32CubeProgrammer.app/Contents/MacOs/bin/STM32_Programmer_CLI -c port=SWD
-      -------------------------------------------------------------------
-                        STM32CubeProgrammer v2.17.0                  
-      -------------------------------------------------------------------
+-------------------------------------------------------------------
+STM32CubeProgrammer v2.17.0
+-------------------------------------------------------------------
 
 ST-LINK SN  : 53FF6C064884534937360587
 ST-LINK FW  : V2J37S7
@@ -460,7 +466,7 @@ Aight, had to install cube stuff but then the arduino upload worked:
     Warning: long options not supported due to getopt from FreeBSD usage.
     Selected interface: swd
     -------------------------------------------------------------------
-    STM32CubeProgrammer v2.17.0                  
+    STM32CubeProgrammer v2.17.0
     -------------------------------------------------------------------
 
     ST-LINK SN  : 53FF6C064884534937360587
@@ -483,8 +489,8 @@ Aight, had to install cube stuff but then the arduino upload worked:
     Memory Programming ...
     Opening and parsing file: Base.ino.bin
     File          : Base.ino.bin
-    Size          : 14.84 KB 
-    Address       : 0x08000000 
+    Size          : 14.84 KB
+    Address       : 0x08000000
 
 
     Erasing memory corresponding to segment 0:
@@ -495,12 +501,12 @@ Aight, had to install cube stuff but then the arduino upload worked:
     File download complete
     Time elapsed during download operation: 00:00:01.048
 
-    RUNNING Program ... 
+    RUNNING Program ...
     Address:      : 0x8000000
     Application is running, Please Hold on...
     Start operation achieved successfully
 
-    
+
 Was also able to get serial monitor working by setting USB Support Generic Serial CDC.
 Man, Arduino is nicer than Rust lol.
 
@@ -528,12 +534,12 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/relea
 $ probe-rs info
 Probing target via JTAG
 
- WARN probe_rs::probe::stlink: send_jtag_command 242 failed: JtagGetIdcodeError
+WARN probe_rs::probe::stlink: send_jtag_command 242 failed: JtagGetIdcodeError
 Error identifying target using protocol JTAG: An error with the usage of the probe occurred
 
 Probing target via SWD
 
- WARN probe_rs::probe::stlink: send_jtag_command 242 failed: JtagGetIdcodeError
+WARN probe_rs::probe::stlink: send_jtag_command 242 failed: JtagGetIdcodeError
 Error identifying target using protocol SWD: An error with the usage of the probe occurred
 
 
@@ -545,14 +551,14 @@ Probing target via JTAG
 ARM Chip with debug port Default:
 Debug Port: DPv1, DP Designer: ARM Ltd
 └── 0 MemoryAP
-    └── ROM Table (Class 1), Designer: STMicroelectronics
-        ├── Cortex-M3 SCS   (Generic IP component)
-        │   └── CPUID
-        │       ├── IMPLEMENTER: ARM Ltd
-        │       ├── VARIANT: 1
-        │       ├── PARTNO: Cortex-M3
-        │       └── REVISION: 1
-        ├── Cortex-M3 DWT   (Generic IP component)
-        ├── Cortex-M3 FBP   (Generic IP component)
-        ├── Cortex-M3 ITM   (Generic IP component)
-        └── Cortex-M3 TPIU  (Coresight Component)
+└── ROM Table (Class 1), Designer: STMicroelectronics
+├── Cortex-M3 SCS   (Generic IP component)
+│   └── CPUID
+│       ├── IMPLEMENTER: ARM Ltd
+│       ├── VARIANT: 1
+│       ├── PARTNO: Cortex-M3
+│       └── REVISION: 1
+├── Cortex-M3 DWT   (Generic IP component)
+├── Cortex-M3 FBP   (Generic IP component)
+├── Cortex-M3 ITM   (Generic IP component)
+└── Cortex-M3 TPIU  (Coresight Component)
