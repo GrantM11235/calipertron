@@ -11,7 +11,12 @@ First [install Rust](https://www.rust-lang.org/tools/install), then:
     rustup target add thumbv7m-none-eabi
     cargo install probe-rs-tools
 
-For Python analysis stuff, [install Rye](https://rye.astral.sh/).
+For Python analysis stuff, [install UV](https://github.com/astral-sh/uv?tab=readme-ov-file#installation).
+then run
+
+    cd analysis/
+    uv sync
+
 
 ## firmware/
 Rust firmware for v1.1 PCB based on the Embassy framework.
