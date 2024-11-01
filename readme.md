@@ -54,6 +54,11 @@ Install:
 
 ## Log
 
+### Nov 1 - Do proper grid search of params.
+
+Make frontend parameter_sweep binary robust to the device freezing and needing to be restarted.
+
+
 ### Oct 23 - Do some design simluations to better understand PDM and sampling
 
 Added a new design_simulations notebook to try and understand whether an analog low-pass filter is necessary to smooth the reflected signal before reading by the ADC, or if all of that will wash out in software.
