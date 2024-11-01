@@ -15,9 +15,10 @@ pub enum AdcSamplingPeriod {
 }
 
 impl AdcSamplingPeriod {
-    pub fn to_seconds(&self) -> f64 {
+    #[allow(non_snake_case)]
+    pub fn to_Hz(&self) -> f64 {
         use AdcSamplingPeriod::*;
-        let cycles = match self {
+        let sample_cycles = match self {
             CYCLES1_5 => 1.5,
             CYCLES7_5 => 7.5,
             CYCLES13_5 => 13.5,
@@ -30,7 +31,7 @@ impl AdcSamplingPeriod {
 
         let adc_frequency = 12_000_000.;
         let adc_sample_overhead_cycles = 12.5; // see reference manual section 11.6
-        (cycles + adc_sample_overhead_cycles) / adc_frequency
+        adc_frequency / (sample_cycles + adc_sample_overhead_cycles)
     }
 }
 

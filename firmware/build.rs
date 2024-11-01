@@ -74,17 +74,18 @@ fn main() {
     let dest_path = std::path::Path::new(&out_dir).join("constants.rs");
     let mut f = File::create(&dest_path).unwrap();
 
-    let pdm_frequency: u32 = 100_000; // 100 kHz
+    let pdm_frequency: u32 = 222_000;
     f.write_all(format!("pub const PDM_FREQUENCY: u32 = {:?};\n", pdm_frequency).as_bytes())
         .unwrap();
 
     let pdm_length = 128;
+    let num_samples = 128;
 
-    let num_samples = 512;
     let signal_frequency = pdm_frequency as f64 / pdm_length as f64;
     let adc_frequency = 12_000_000.;
-    //let adc_sample_cycles = 239.5;
-    let adc_sample_cycles = 71.5;
+    // let adc_sample_cycles = 239.5;
+    // let adc_sample_cycles = 71.5;
+    let adc_sample_cycles = 41.5;
     let adc_sample_overhead_cycles = 12.5; // see reference manual section 11.6
     let sampling_frequency = adc_frequency / (adc_sample_cycles + adc_sample_overhead_cycles);
 

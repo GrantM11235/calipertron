@@ -11,9 +11,9 @@ use tokio::time::timeout;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::create("parameter_sweep.csv")?;
     let mut csv_writer = BufWriter::new(file);
-    writeln!(csv_writer, "pdm_frequency,adc_period,n,sample")?;
+    writeln!(csv_writer, "pdm_frequency,sampling_frequency,n,sample")?;
 
-    for frequency_kHz in (25..150).step_by(5) {
+    for frequency_kHz in (32..256).step_by(2) {
         use AdcSamplingPeriod::*;
         for adc_sampling_period in &[
             CYCLES1_5,
@@ -103,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         csv_writer,
                         "{},{},{},{}",
                         frequency_kHz * 1000,
-                        adc_sampling_period.to_seconds(),
+                        adc_sampling_period.to_Hz(),
                         idx,
                         sample
                     )?;
