@@ -1,8 +1,11 @@
-# Kevin's work-in-progress caliper firmware/software
+# Calipertron
 
-Please keep code/repo private for now. I'll tidy and open-source later.
+A lil' exploration in understanding how electronic calipers work.
 
-Firmware running against [BluePillCaliper](https://github.com/MitkoDyakov/BluePillCaliper/).
+See [full background and results](https://kevinlynagh.com/calipertron/).
+
+All of the work in this repo was done with the [v1.1 PCB designed by Mitko](https://github.com/MitkoDyakov/Calipatron/tree/444c72c3e81eab0a2e7ee198f5574062dc1fc510/Hardware/V1.1).
+See also his [DIY Digital Caliper](https://hackaday.io/project/194778-diy-digital-caliper) Hackday.io project page.
 
 ## install
 
@@ -19,45 +22,30 @@ then run
 
 
 ## firmware/
+
 Rust firmware for v1.1 PCB based on the Embassy framework.
 
 Build and flash via STLink:
 
-    cargo run --release --bin usb_custom
+    cargo run --release --bin local
 
 Attach to running firmware:
 
-    probe-rs attach --chip STM32F103C8 target/thumbv7m-none-eabi/release/usb_custom
+    probe-rs attach --chip STM32F103C8 target/thumbv7m-none-eabi/release/local
+    
+I did all of the development using Rust 1.81 on an M1 Macbook air running MacOS 12.7.6.
+
 
 ## frontend/
-Custom USB "oscilliscope" and control UI:
 
-    cargo run --release --bin scope
+Parameter sweep:
 
-
-
-## analysis/
-
-Python analysis
-
-Install:
-
-    rye sync
-
-
-## Open questions / TODO
-
-- Add hardware low-pass filter to emitted PDM signal?
-- Work out theoretical justification for PDM and sampling frequencies? (i.e., far from (mulitples of) line noise, coupling efficiency between transmit and reflect PCBs, etc.)
-
-- try simple cross correlation in python
-- write param sweep firmware/script:
-- set PDM frequency and ADC sample rate
-- record 100 cycles
-- save to disk
-
+    cargo run --release --bin parameter_sweep
+    
 
 ## Log
+
+### Nov 2 - Initial public release, hurray!
 
 ### Nov 1 - Do proper grid search of params.
 

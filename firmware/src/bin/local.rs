@@ -141,7 +141,10 @@ async fn main(_spawner: Spawner) {
 
     let user_button = Input::new(p.PB14, embassy_stm32::gpio::Pull::None);
 
-    let mut position_estimator = PositionAccumulator::new(0.0, 0.1);
+    let mut phase_accumulator = PhaseAccumulator::new(0.0, 0.1);
+
+    // 9.4mm spacing across all 8 emission pads on the v1.1 PCB Mitko sent me.
+    let distance_per_phase_cycle = 9.4;
 
     let fut_main = async {
         loop {
@@ -167,8 +170,14 @@ async fn main(_spawner: Spawner) {
             }
             let phase = sum_sine.atan2(sum_cosine);
 
-            position_estimator.update(phase);
-            info!("Phase: {} Position: {}", phase, position_estimator.position);
+            phase_accumulator.update(phase);
+            info!(
+                //"Phase: {:06.2} Position: {:06.2}",
+                "Position: {}mm, Phase: {} ",
+                phase_accumulator.unwrapped_phase
+                    * (distance_per_phase_cycle / (2.0 * core::f32::consts::PI)),
+                phase,
+            );
 
             // make sure everything is reset before we continue
             pdm_transfer.await;
@@ -178,7 +187,7 @@ async fn main(_spawner: Spawner) {
 
             if user_button.is_low() {
                 info!("Button pressed, zeroing");
-                position_estimator.position = 0.;
+                phase_accumulator.unwrapped_phase = 0.;
             }
         }
     };

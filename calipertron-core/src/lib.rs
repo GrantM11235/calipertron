@@ -3,23 +3,23 @@
 use core::f32::consts::PI;
 
 use num_traits::Float;
-pub struct PositionAccumulator {
-    pub position: f32,
-    last_angle: f32,
+pub struct PhaseAccumulator {
+    pub unwrapped_phase: f32,
+    last_phase: f32,
     hysteresis_threshold: f32,
 }
 
-impl PositionAccumulator {
-    pub fn new(initial_angle: f32, hysteresis_threshold: f32) -> Self {
-        PositionAccumulator {
-            position: 0.0,
-            last_angle: initial_angle,
+impl PhaseAccumulator {
+    pub fn new(initial_phase: f32, hysteresis_threshold: f32) -> Self {
+        PhaseAccumulator {
+            unwrapped_phase: 0.0,
+            last_phase: initial_phase,
             hysteresis_threshold,
         }
     }
 
-    pub fn update(&mut self, new_angle: f32) {
-        let mut delta = new_angle - self.last_angle;
+    pub fn update(&mut self, new_phase: f32) {
+        let mut delta = new_phase - self.last_phase;
 
         // Handle wraparound
         if delta > PI {
@@ -30,8 +30,8 @@ impl PositionAccumulator {
 
         // Apply hysteresis
         if delta.abs() > self.hysteresis_threshold {
-            self.position += delta;
-            self.last_angle = new_angle;
+            self.unwrapped_phase += delta;
+            self.last_phase = new_phase;
         }
     }
 }
