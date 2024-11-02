@@ -4,9 +4,9 @@ A lil' exploration in understanding how electronic calipers work.
 
 See [full background and results](https://kevinlynagh.com/calipertron/).
 
-
-![A demo video showing a sliding caliper and position values updating in real time.](2024_11_02_caliper_demo.mp4)
-
+<video src="https://github.com/user-attachments/assets/29552f66-8df2-4e82-a5d7-7be6bd64245d" controls="true" loop="true" autoplay="true">
+    <p>A demo video showing a sliding caliper and position values updating in real time.</p>
+</video>
 
 All of the work in this repo was done with the [v1.1 PCB designed by Mitko](https://github.com/MitkoDyakov/Calipatron/tree/444c72c3e81eab0a2e7ee198f5574062dc1fc510/Hardware/V1.1).
 See also his [DIY Digital Caliper](https://hackaday.io/project/194778-diy-digital-caliper) Hackday.io project page.
