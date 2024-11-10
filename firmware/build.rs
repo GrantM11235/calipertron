@@ -50,14 +50,16 @@ fn generate_sine_cosine_table(
     num_samples: usize,
 ) -> String {
     let mut output = String::new();
-    output.push_str("pub const SINE_COSINE_TABLE: [(f32, f32); ");
+    output.push_str("pub const SINE_COSINE_TABLE: [(i32, i32); ");
     output.push_str(&num_samples.to_string());
     output.push_str("] = [\n");
 
+    let f_to_i32 = |x: f64| (x * i32::MAX as f64).round() as i32;
+
     for i in 0..num_samples {
         let angle = 2.0 * PI * signal_frequency * (i as f64 * (1.0 / sampling_frequency));
-        let sine = angle.sin() as f32;
-        let cosine = angle.cos() as f32;
+        let sine = f_to_i32(angle.sin());
+        let cosine = f_to_i32(angle.cos());
         output.push_str(&format!("    ({:?}, {:?}),\n", sine, cosine));
     }
 

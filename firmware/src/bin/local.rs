@@ -158,16 +158,20 @@ async fn main(_spawner: Spawner) {
             adc_transfer.await;
             pdm_transfer.request_stop();
 
-            let mut sum_sine: f32 = 0.0;
-            let mut sum_cosine: f32 = 0.0;
+            let mut sum_sine: i64 = 0;
+            let mut sum_cosine: i64 = 0;
 
             let adc_buf = unsafe { &ADC_BUF[..] };
 
             for i in 0..NUM_SAMPLES {
                 let (sine, cosine) = SINE_COSINE_TABLE[i];
-                sum_sine += adc_buf[i] as f32 * sine;
-                sum_cosine += adc_buf[i] as f32 * cosine;
+                sum_sine += adc_buf[i] as i64 * sine as i64;
+                sum_cosine += adc_buf[i] as i64 * cosine as i64;
             }
+
+            let sum_sine = sum_sine as f32;
+            let sum_cosine = sum_cosine as f32;
+
             let phase = sum_sine.atan2(sum_cosine);
 
             phase_accumulator.update(phase);
